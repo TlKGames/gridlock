@@ -113,7 +113,7 @@ check(said(k).map(([, s]) => s).join() === 'pickup,hello,tip,on_it', 'answered: 
 
 // Business income reaching the bank at midnight comes with a text from the bank.
 const biz = w.city.properties.find((p) => PROPERTIES[p.spec].kind === 'business' && PROPERTIES[p.spec].income > 0)!;
-room.econ.owners.set(biz.id, pl.name.toLowerCase());
+room.econ.owners.set(biz.id, pl.ownerKey);
 k = msgs.length;
 const hourly = (h: number) => (room.business as unknown as { hourly: (h: number) => void }).hourly(h);
 hourly(23); hourly(0);

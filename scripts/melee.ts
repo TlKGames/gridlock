@@ -25,7 +25,7 @@ const civ = PEDS.findIndex((p) => p.behaviour === 'civilian');
 // Out in the open (the middle of a wide street), not against whatever's by the spawn point.
 const open = w.city.segs.find((s) => s.way === undefined && s.axis === 'h' && s.lanes > 1 && s.x1 - s.x0 > 80 && s.x0 > 500)!;
 me.body.x = (open.x0 + open.x1) / 2; me.body.y = open.y0;
-const mark = spawnPed(w, civ, me.body.x + 1.1, me.body.y, Math.PI);
+let mark = spawnPed(w, civ, me.body.x + 1.1, me.body.y, Math.PI);
 mark.ai = null; // stands there and takes it
 const hp0 = mark.hp;
 const fx: number[][] = [];
@@ -48,10 +48,17 @@ check(hp0 - mark.hp >= fists.damage - 0.01, `a punch lands for ${hp0 - mark.hp} 
 check(r1.staggered && r1.moved > 0.4, `it shoves them back ${r1.moved.toFixed(2)} m and they reel`);
 check(fx.some((e) => e[0] === FX.Hit && e[1] === me.id && e[2] === mark.id), 'a hit event goes out (thud, jolt)');
 check(fx.some((e) => e[0] === FX.Swing && e[1] === me.id), 'and the swing (the arm throws it)');
-// Walk back up to them and land two more, quickly: the third floors them.
+// Civilians can fall early on a lucky hit. A sparring player takes the full three-hit fist combo.
+mark.body.y += 15;
+const partner = room.join('Sparring partner', { send: () => {}, close: () => {} });
+if (typeof partner === 'string') throw new Error(partner);
+room.stop();
+mark = w.peds.get(partner.pid)!;
 const close = () => { mark.body.x = me.body.x + 1.1; mark.body.y = me.body.y; mark.body.vx = 0; mark.body.vy = 0; };
+close(); punch(2);
 close(); punch(2); check(mark.down === 0, 'two in a row: still up');
 close(); punch(1); check(mark.down > 0, 'the third in a row floors them');
+room.leave(partner);
 const hits = Math.ceil(PEDS[civ].hp / fists.damage);
 check(hits <= 7, `a civilian goes down for good in ${hits} punches (was 12)`);
 
@@ -64,11 +71,12 @@ check(hits <= 7, `a civilian goes down for good in ${hits} punches (was 12)`);
   seatPed(w, me, car, 0);
   me.wi = me.weapons.findIndex((h) => h.w === weaponIndex('pistol'));
   const shoot = (aim: number) => {
-    const before = fx.length;
+    const pistol = me.weapons[me.wi];
+    const before = pistol.ammo + pistol.clip;
     me.fireCd = 0;
     pl.queue.push([0, 0, 0, 0, 0, aim, 1, -1]); room.tick(); fx.push(...w.fx);
     pl.queue.push([0, 0, 0, 0, 0, aim, 0, -1]); room.tick(); fx.push(...w.fx);
-    return fx.slice(before).some((e) => e[0] === FX.Shot);
+    return pistol.ammo + pistol.clip < before;
   };
   check(!shoot(car.body.angle + Math.PI), 'from a car, a shot behind you is refused');
   check(shoot(car.body.angle + Math.PI / 2), 'and one out of the side window goes off');

@@ -62,23 +62,23 @@ export class Interact {
     return best;
   }
 
-  promptText(s: Spot | null, owners: Map<number, string>, myName: string): string | null {
+  promptText(s: Spot | null, owners: Map<number, string>, profile: Profile): string | null {
     if (!s) return null;
     if (!s.property) return s.place.name;
     const owner = owners.get(s.place.id);
     const spec = PROPERTIES[s.place.spec];
     if (!owner) return `${s.place.name} · for sale $${spec.price.toLocaleString('en-US')}`;
-    return owner === myName.toLowerCase() ? `${s.place.name} · yours` : `${s.place.name} · owned by ${owner}`;
+    return profile.owned.includes(s.place.id) ? `${s.place.name} · yours` : `${s.place.name} · owned by ${owner}`;
   }
 
-  toggle(you: () => YouState, profile: () => Profile, owners: Map<number, string>, myName: string, buy: Buy): void {
+  toggle(you: () => YouState, profile: () => Profile, owners: Map<number, string>, buy: Buy): void {
     if (this.pane.isOpen && this.openSpot) { this.pane.close(); return; }
     const s = this.current;
     if (!s) return;
     this.openSpot = s;
     this.pane.onClose = () => { this.openSpot = null; };
     this.pane.open(() => s.property
-      ? propertyContent(s.place, you(), profile(), owners.get(s.place.id) ?? null, myName, buy)
+      ? propertyContent(s.place, you(), profile(), owners.get(s.place.id) ?? null, buy)
       : serviceContent(s.place, you(), buy));
   }
 

@@ -58,7 +58,7 @@ check(pl.cash === 1000 - Math.floor(1000 * RULES.deathCashLoss) && pl.bank === 5
 
 // Business income: whatever's in the safes at midnight goes to the bank (less the armoured-car fee).
 const biz = w.city.properties.find((p) => PROPERTIES[p.spec].kind === 'business' && PROPERTIES[p.spec].income > 0)!;
-econ.owners.set(biz.id, pl.name.toLowerCase());
+econ.owners.set(biz.id, pl.ownerKey);
 const hourly = (h: number) => (room.business as unknown as { hourly: (h: number) => void }).hourly(h);
 room.business.safes.clear(); // a previous run's room save may have left money in them
 const b0 = pl.bank, c0 = pl.cash;

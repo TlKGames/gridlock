@@ -37,7 +37,7 @@ const REACH = 2.6;
 export class CardTables {
   private sessions = new Map<number, Session>();
 
-  constructor(private w: World) {}
+  constructor(private w: World, private save: (pl: Player) => void) {}
 
   /** Is anyone playing at this table? */
   inUse = (table: number): boolean => [...this.sessions.values()].some((s) => s.spot.id === table);
@@ -90,20 +90,27 @@ export class CardTables {
     return null;
   }
 
+  /** Money the player takes away if the connection ends at this instant. */
+  refund(pl: Player): number {
+    const s = this.sessions.get(pl.id);
+    if (s?.poker) return s.poker.t.seats[0].stack;
+    if (s?.faro) return [...s.faro.bets.values()].reduce((sum, bet) => sum + bet, 0);
+    return s?.dice?.bet ?? 0;
+  }
+
   leave(pl: Player, why?: string): void {
     const s = this.sessions.get(pl.id);
     if (!s) return;
+    const chips = this.refund(pl);
+    pl.cash += chips;
     this.sessions.delete(pl.id);
     if (s.poker) {
-      const chips = s.poker.t.seats[0].stack;
-      if (chips > 0) { pl.cash += chips; this.w.notify('money', `You cash out $${chips.toLocaleString('en-US')}.`, pl); }
+      if (chips > 0) this.w.notify('money', `You cash out $${chips.toLocaleString('en-US')}.`, pl);
       endPoker(this.w, s.poker);
     }
-    // A hand of blackjack in play is forfeit; dice and faro stakes on the layout come back.
-    if (s.dice?.bet) pl.cash += s.dice.bet;
-    if (s.faro) for (const v of s.faro.bets.values()) pl.cash += v;
     if (s.dealer) { const d = this.w.peds.get(s.dealer); if (d && !d.dead) removePed(this.w, d); }
     if (why) this.w.notify('info', why, pl);
+    this.save(pl);
     pl.send({ t: 'table', v: null } satisfies S2C);
   }
 
@@ -114,7 +121,7 @@ export class CardTables {
       if (!pl) { this.sessions.delete(id); if (s.poker) endPoker(this.w, s.poker); continue; }
       if (!p || p.dead || p.vehicle || Math.hypot(p.body.x - s.spot.at.x, p.body.y - s.spot.at.y) > REACH + 1.5) { this.leave(pl); continue; }
       if (s.poker && tickPoker(this.w, s.poker, dt, (t) => s.log.push(t))) s.dirty = true;
-      if (s.dirty) { s.dirty = false; pl.send({ t: 'table', v: this.view(s) } satisfies S2C); }
+      if (s.dirty) { this.save(pl); s.dirty = false; pl.send({ t: 'table', v: this.view(s) } satisfies S2C); }
     }
   }
 

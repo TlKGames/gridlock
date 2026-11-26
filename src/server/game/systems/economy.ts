@@ -16,7 +16,7 @@ import type { World } from '../world';
 import { clearHeat, lawCanSee } from './wanted';
 
 export class Economy {
-  /** property id -> owner name (lower-case key is the profile name). */
+  /** property id -> room profile key. */
   readonly owners = new Map<number, string>();
   onChange: () => void = () => {};
 
@@ -96,8 +96,11 @@ export class Economy {
     }
   }
 
-  ownerList(): [number, string | null][] {
-    return this.w.city.properties.map((p) => [p.id, this.owners.get(p.id) ?? null]);
+  ownerList(displayName: (key: string) => string): [number, string | null][] {
+    return this.w.city.properties.map((p) => {
+      const key = this.owners.get(p.id);
+      return [p.id, key ? displayName(key) : null];
+    });
   }
 
   /** Validates and performs a purchase. Returns an error message or null. */
@@ -168,7 +171,7 @@ export class Economy {
         if (this.owners.has(place.id)) return 'Already owned.';
         const spec = PROPERTIES[place.spec];
         if (!pay(spec.price)) return 'Not enough money.';
-        this.owners.set(place.id, pl.name.toLowerCase());
+        this.owners.set(place.id, pl.ownerKey);
         pl.owned.push(place.id);
         w.notify('info', `${pl.name} bought ${place.name}`);
         this.onChange();

@@ -23,7 +23,7 @@ const hourly = (h: number) => (biz as unknown as { hourly: (h: number) => void }
 const me = w.peds.get(pl.pid)!;
 const own = (perk: string | undefined, income = true) => {
   const p = w.city.properties.find((x) => { const s = PROPERTIES[x.spec]; return s.kind === 'business' && s.perk === perk && (!income || s.income > 0) && !room.econ.owners.has(x.id); })!;
-  room.econ.owners.set(p.id, pl.name.toLowerCase());
+  room.econ.owners.set(p.id, pl.ownerKey);
   pl.owned.push(p.id);
   return p;
 };

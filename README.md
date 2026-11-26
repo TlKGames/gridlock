@@ -1,6 +1,6 @@
 # GRIDLOCK
 
-Top-down multiplayer crime sandbox for up to 6 friends in the browser.
+A top-down multiplayer sandbox for up to six friends in the browser. Choose Bayhaven for city crime and crew jobs, or Redrock Territory for frontier towns, horses and outlaws.
 
 ## Play
 
@@ -26,7 +26,7 @@ Open http://localhost:5228, pick a name, **Create game**, then send friends the 
 
 Room saves (who owns which property, business safes, the clock) live in `data/` (or
 `GRIDLOCK_DATA`). Characters live in the players' browsers. Both are tagged with their universe
-(`bayhaven`) and only load where it matches.
+and only load where it matches.
 
 **Radio:** each vehicle's radio comes tuned to its own station; press R (controller: D-pad up)
 to cycle that vehicle's radio through Off and the stations
@@ -46,12 +46,14 @@ values and sends progress back every few seconds (and right after purchases) to 
 Server redeploys can't lose them; clearing the site's data in the browser does. Properties
 belong to each room and stay on the server.
 
-**Continue:** every room is the same city (Bayhaven), and a character remembers its last room,
+**Continue:** each room belongs to one universe. A character remembers its last room,
 spot and the vehicle it was driving. "Continue in CODE" in the lobby goes back into that room
 (reopened if nobody is in it). Whoever joins a room, by code or by its link, comes back at their
 own character's last spot, in that vehicle.
 
-## Things to do
+Run `npm test` to typecheck and exercise the core multiplayer, persistence, combat and universe checks.
+
+## Things to do in Bayhaven
 
 - **Gang payphones**: booths in each gang's turf blink in the gang's colour when there's work.
   Walk into a ringing phone to answer it. Jobs: hits, torching rival cars, stealing specific rides, courier runs,

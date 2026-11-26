@@ -106,7 +106,7 @@ export class Game {
   private jobRoute: JobRoute;
   private chatting = false;
 
-  constructor(private conn: Connection, private myId: number, private myName: string, private code: string, seed: number, private onLeave: () => void) {
+  constructor(private conn: Connection, private myId: number, private code: string, seed: number, private onLeave: () => void) {
     const city = generateCity(seed);
     installWays(city.ways);
     this.map = new CityMap(city);
@@ -221,7 +221,7 @@ export class Game {
         if (!this.interact.current) { this.input.pressEnter(); break; }
         if (!this.interact.current.property && verbOf(this.interact.current.place.verb)?.shop) { this.openShop(this.interact.current.place); break; } // shop counter (hud/showroom.ts)
         if (this.interact.current.place.verb === 'table') { this.openTable(this.interact.current.place.id); break; } // a card or casino table (hud/cardTable.ts)
-        if (this.you) this.interact.toggle(() => this.you!, () => this.profile, this.owners, this.myName, (kind, id, place) => this.conn.send({ t: 'buy', kind, id, place }));
+        if (this.you) this.interact.toggle(() => this.you!, () => this.profile, this.owners, (kind, id, place) => this.conn.send({ t: 'buy', kind, id, place }));
         break;
       case 'chat':
         if (this.chatting) return;
@@ -464,7 +464,7 @@ export class Game {
     if (ring) this.conn.send({ t: 'job', booth: ring.id });
     // No door or counter here: someone to talk to, if they're the nearest thing (client/game/faceTalk.ts).
     const chat = spot || you.mode !== Mode.Foot ? null : this.faceTalk.find(own, own.alt + 2.9);
-    this.hud.setPrompt(this.pane.isOpen ? null : this.interact.promptText(spot, this.owners, this.myName) ?? chat);
+    this.hud.setPrompt(this.pane.isOpen ? null : this.interact.promptText(spot, this.owners, this.profile) ?? chat);
     this.interact.tick(own.x, own.y);
     this.interact.paintShop(own.x, own.y, Math.hypot(own.vx, own.vy), you, (place) => this.openPaint(place));
     this.pane.refresh();

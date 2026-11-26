@@ -103,9 +103,9 @@ function businessRows(place: Place, you: YouState, profile: Profile, buy: Buy): 
   return rows;
 }
 
-export function propertyContent(place: Place, you: YouState, profile: Profile, owner: string | null, myName: string, buy: Buy): PaneContent {
+export function propertyContent(place: Place, you: YouState, profile: Profile, owner: string | null, buy: Buy): PaneContent {
   const spec = PROPERTIES[place.spec];
-  const mine = owner === myName.toLowerCase();
+  const mine = profile.owned.includes(place.id);
   const rows: PaneRow[] = [];
   const info = spec.kind === 'home'
     ? `Home · garage for ${spec.garage} · respawn point`

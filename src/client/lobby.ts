@@ -119,7 +119,7 @@ function start(create: boolean, room: string, resume = false): void {
       loading.hidden = false;
       // Let the loading screen paint before the city builds (and the models have arrived).
       void modelsReady.then(() => setTimeout(() => {
-        const game = new Game(conn, m.id, name, m.room, m.seed, () => { location.hash = ''; location.reload(); });
+        const game = new Game(conn, m.id, m.room, m.seed, () => { location.hash = ''; location.reload(); });
         game.setVoice(guest ? undefined : ch?.voice);
         (window as unknown as { __game: Game }).__game = game; // dev/debug hook
         // The loading screen stays up until the first snapshot arrives (Game hides it).

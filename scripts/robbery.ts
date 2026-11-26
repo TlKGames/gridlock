@@ -131,7 +131,7 @@ run(RULES.robSeconds);
 check(pl.cash - cash3 === 300 && (room.business.safes.get(store.place.id) ?? 0) === 0, `a rival's store: the safe's $300 comes out (+$${pl.cash - cash3})`);
 
 // 6. Your own place: your staff don't put their hands up.
-room.econ.owners.set(store.place.id, 'robber');
+room.econ.owners.set(store.place.id, pl.ownerKey);
 room.business.safes.set(store.place.id, 300);
 c = enter(store);
 aimAt = c;
