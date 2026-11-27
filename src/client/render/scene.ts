@@ -12,6 +12,14 @@ export interface Lighting {
 const SKY_DAY = new THREE.Color('#9fb4c4');
 const SKY_NIGHT = new THREE.Color('#0d1220');
 
+const SUN_DAY = new THREE.Color('#fff2dc');
+const SUN_TWILIGHT = new THREE.Color('#ff9a5a');
+const MOON = new THREE.Color('#7f9cff');
+const AMBIENT_DAY = new THREE.Color('#cfe0ff');
+const AMBIENT_NIGHT = new THREE.Color('#7d90c8');
+const GROUND_DAY = new THREE.Color('#4a4438');
+const GROUND_NIGHT = new THREE.Color('#2a2c3a');
+
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -109,7 +117,7 @@ export class Stage {
     const day = Math.max(0, s);
     const twilight = Math.max(0, 1 - Math.abs(hour - 18.3) / 1.2) + Math.max(0, 1 - Math.abs(hour - 6) / 1.2);
     // Night falls quickly around 18:00-19:00 and lifts around 5:30-6:30.
-    const night = Math.min(1, Math.max(0, (0.12 - s) / 0.28));
+    const night = 1 - THREE.MathUtils.smoothstep(s, -0.16, 0.12);
     this.lighting.night = night;
     this.lighting.hour = hour;
     const az = ((hour - 6) / 12) * Math.PI;
@@ -117,16 +125,15 @@ export class Stage {
     const dir = new THREE.Vector3(Math.cos(az) * 0.8, elev, 0.45 + Math.sin(az) * 0.2).normalize();
     this.sun.position.set(focusX + dir.x * 220, dir.y * 220, focusY + dir.z * 220);
     this.sun.target.position.set(focusX, 0, focusY);
-    const sunColor = new THREE.Color('#fff2dc').lerp(new THREE.Color('#ff9a5a'), Math.min(1, twilight));
-    const moon = new THREE.Color('#7f9cff');
-    this.sun.color.copy(night > 0.6 ? moon : sunColor);
-    this.sun.intensity = night > 0.6 ? 0.9 : 0.9 + day * 1.6;
+    // Keep the warm horizon light into twilight, then blend it into moonlight.
+    const moonlight = THREE.MathUtils.smoothstep(night, 0.25, 1);
+    this.sun.color.lerpColors(SUN_DAY, SUN_TWILIGHT, twilight).lerp(MOON, moonlight);
+    this.sun.intensity = 0.9 + day * 1.6;
     this.hemi.intensity = 0.95 + day * 0.3 - night * 0.05;
-    this.hemi.color.set(night > 0.5 ? '#7d90c8' : '#cfe0ff');
-    this.hemi.groundColor.set(night > 0.5 ? '#2a2c3a' : '#4a4438');
-    const sky = SKY_DAY.clone().lerp(SKY_NIGHT, night);
+    this.hemi.color.lerpColors(AMBIENT_DAY, AMBIENT_NIGHT, night);
+    this.hemi.groundColor.lerpColors(GROUND_DAY, GROUND_NIGHT, night);
+    const sky = (this.scene.fog as THREE.Fog).color.lerpColors(SKY_DAY, SKY_NIGHT, night);
     this.renderer.setClearColor(sky);
-    (this.scene.fog as THREE.Fog).color.copy(sky);
     this.renderer.toneMappingExposure = 1.05 + night * 0.25;
     this.scene.environmentIntensity = 0.15 + day * 0.65;
   }
