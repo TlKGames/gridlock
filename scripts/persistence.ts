@@ -72,6 +72,47 @@ try {
   reopened.onMessage(back, { t: 'table', op: 'leave' });
   assert.equal(back.cash, beforeBet, 'leaving craps returns the stake exactly once');
   reopened.leave(back);
+  // The browser sees the receipt before opening the table. Drop every subsequent packet,
+  // including the final save, and restore through the same sanitizer used by a room worker.
+  for (const wins of [true, false]) {
+    const shooter = seat(reopened, { ...character, cash: 20, bank: 5000 });
+    Object.assign(reopened.world.peds.get(shooter.pid)!.body, craps.at);
+    const move = (op: string, s?: string, n?: number) =>
+      reopened.onMessage(shooter, { t: 'table', op, s, n, table: craps.id });
+    move('sit');
+    reopened.tick();
+    const browser: CharacterSave = { ...character, ...latest };
+    assert.ok(browser.crapsReceipt);
+    connected = false;
+    move('bet', 'pass', 30);
+    const rng = reopened.world.rng;
+    const next = rng.next;
+    try {
+      rng.next = () => 0.4; // 3 + 3 establishes the point
+      move('roll');
+      const dice = wins ? [0.4, 0.4] : [0.4, 0.55]; // six wins, seven loses
+      rng.next = () => { assert.ok(dice.length); return dice.shift()!; };
+      move('odds', 'pass', 60);
+      assert.equal(dice.length, 0);
+    } finally {
+      rng.next = next;
+    }
+    assert.equal(shooter.cash, 0);
+    assert.equal(shooter.bank, 4930);
+    reopened.leave(shooter);
+    assert.equal(shooter.cash, wins ? 192 : 0); // 30 + 30 on pass; 60 + 72 on odds
+    connected = true;
+    const elsewhere = new Room('AWAY', RULES.citySeed);
+    const restored = seat(elsewhere, sanitizeCharacter(browser)!);
+    assert.equal(restored.bank, shooter.bank);
+    assert.equal(restored.cash, shooter.cash);
+    assert.equal(latest?.crapsReceipt, undefined, 'restored wallet clears the receipt');
+    const secondLogin: CharacterSave = sanitizeCharacter({ ...character, ...latest })!;
+    assert.equal(secondLogin.cash, shooter.cash, 'no duplicate payment on the next login');
+    assert.equal(sanitizeCharacter(browser)?.cash, shooter.cash, 'retrying an old save is idempotent');
+    elsewhere.leave(restored);
+  }
+  console.log('Unsettled craps wins and losses survive disconnect and cross-room reconnect.');
   console.log('Poker disconnect, legacy migration and independent property ownership passed.');
 } finally {
   rmSync(dir, { recursive: true, force: true });

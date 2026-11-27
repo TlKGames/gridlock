@@ -3,6 +3,8 @@
 // out of the chips you buy in with (systems/cardPoker.ts). Who may sit: anyone at the house's
 // tables; a gang's back-room game once it's invited you (systems/cardInvites.ts), then any time;
 // a friend's while their game's on. Walk away and you're cashed out.
+import { randomUUID } from 'node:crypto';
+import { recordCrapsWallet } from '../../persist';
 import { FRIENDS, PEDS, pedWith, RULES, TABLES } from '../../../shared/packs';
 import type { TableSpec } from '../../../shared/packs/types';
 import type { S2C, TableView } from '../../../shared/protocol';
@@ -26,6 +28,9 @@ interface Session {
   bj?: Blackjack;
   dice?: Dice;
   craps?: Craps;
+  // Only the server knows the walk-away result until the shooter leaves.
+  crapsPayout?: number;
+  checkpoint?: { receipt: string; cash?: number; bank?: number };
   faro?: Faro;
   roulette?: { last: number; history: number[]; bets: [string, number, number, number][] };
   slots?: { reels: number[] | null; won: number };
@@ -89,15 +94,41 @@ export class CardTables {
       if (spec.game === 'slots') s.slots = { reels: null, won: 0 };
       s.dealer = dealerFor(w, spot);
     }
+    if (s.craps && pl.character) s.checkpoint = { receipt: randomUUID() };
     this.sessions.set(pl.id, s);
+    if (s.checkpoint && !this.checkpoint(pl)) {
+      this.sessions.delete(pl.id);
+      const dealer = s.dealer ? w.peds.get(s.dealer) : undefined;
+      if (dealer) removePed(w, dealer);
+      return 'The table could not save your balance. Please try again.';
+    }
     p.body.vx = 0; p.body.vy = 0;
     return null;
+  }
+
+  /** Save the final wallet before showing the table or accepting the next move. */
+  checkpoint(pl: Player): string | undefined {
+    const s = this.sessions.get(pl.id);
+    const cp = s?.checkpoint;
+    if (!cp || !pl.character) return;
+    const cash = pl.cash + (s.crapsPayout ?? 0);
+    if (cash !== cp.cash || pl.bank !== cp.bank) {
+      try {
+        recordCrapsWallet(pl.character.id, { receipt: cp.receipt, cash, bank: pl.bank });
+      } catch (err) {
+        console.warn('Could not save the craps wallet', err);
+        return;
+      }
+      cp.cash = cash;
+      cp.bank = pl.bank;
+    }
+    return cp.receipt;
   }
 
   /** Money the player takes away if the connection ends at this instant. */
   refund(pl: Player): number {
     const s = this.sessions.get(pl.id);
-    if (s?.craps) return crapsRefund(s.craps);
+    if (s?.craps) return pl.character ? crapsRefund(s.craps) : s.crapsPayout ?? 0;
     if (s?.poker) return s.poker.t.seats[0].stack;
     if (s?.faro) return [...s.faro.bets.values()].reduce((sum, bet) => sum + bet, 0);
     return s?.dice?.bet ?? 0;
@@ -106,6 +137,7 @@ export class CardTables {
   leave(pl: Player, why?: string): void {
     const s = this.sessions.get(pl.id);
     if (!s) return;
+    this.checkpoint(pl);
     const chips = s.craps ? 0 : this.refund(pl);
     pl.cash += chips;
     this.sessions.delete(pl.id);
@@ -115,7 +147,7 @@ export class CardTables {
     }
     // Full craps settles outstanding line bets on departure. Its result includes open stakes.
     if (s.craps) {
-      const back = crapsWalkAway(s.craps, this.w.rng);
+      const back = s.crapsPayout ?? 0;
       if (back) this.w.earn(pl, back);
     }
     if (s.dealer) { const d = this.w.peds.get(s.dealer); if (d && !d.dead) removePed(this.w, d); }
@@ -269,10 +301,22 @@ export class CardTables {
       return null;
     }
     if (s.craps) {
-      return crapsOp(s.craps, m, {
+      const previous = { craps: structuredClone(s.craps), crapsPayout: s.crapsPayout };
+      const wallet = { cash: pl.cash, bank: pl.bank, earned: pl.earned };
+      const logLength = s.log.length;
+      const err = crapsOp(s.craps, m, {
         stake, rng: w.rng, log: (t) => s.log.push(t), pay: win,
         take: (n) => { if (!(n > 0) || pl.cash + pl.bank < n) return false; take(pl, n); return true; },
       });
+      if (err) return err;
+      s.crapsPayout = crapsWalkAway(structuredClone(s.craps), w.rng);
+      if (s.checkpoint && !this.checkpoint(pl)) {
+        Object.assign(s, previous);
+        Object.assign(pl, wallet);
+        s.log.length = logLength;
+        return 'Your move could not be saved. Please try again.';
+      }
+      return null;
     }
     if (s.dice) {
       const g = s.dice;

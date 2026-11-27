@@ -148,6 +148,7 @@ export class Room {
     if (resume) { ped.body.angle = resume.angle; resumeVehicle(w, pl, ped, resume); }
     w.players.set(pl.id, pl);
     pl.send({ t: 'welcome', id: pl.id, room: this.code, seed: w.seed, maxPlayers: RULES.maxPlayers } satisfies S2C);
+    this.sendSave(pl);
     this.sendProfile(pl);
     this.sendOwners();
     pl.send(this.rounds.modeMsg());
@@ -286,7 +287,7 @@ export class Room {
   }
 
   private sendSave(pl: Player): void {
-    if (pl.character) pl.send({ t: 'save', id: pl.character.id, p: { ...progressOf(pl), cash: this.savedCash(pl), last: lastOf(this.world, pl, this.code) } } satisfies S2C);
+    if (pl.character) pl.send({ t: 'save', id: pl.character.id, p: { ...progressOf(pl), crapsReceipt: this.tables.checkpoint(pl), cash: this.savedCash(pl), last: lastOf(this.world, pl, this.code) } } satisfies S2C);
   }
 
   persist(): void {

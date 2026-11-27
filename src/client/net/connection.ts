@@ -1,6 +1,7 @@
 // WebSocket connection to the game server.
 import { type CharacterSave, UNIVERSE } from '../../shared/packs';
 import { type C2S, PROTOCOL_VERSION, type S2C } from '../../shared/protocol';
+import { saveProgress } from '../lobby/characterStore';
 
 export class Connection {
   private ws: WebSocket;
@@ -19,6 +20,7 @@ export class Connection {
     };
     this.ws.onmessage = (ev) => {
       const m = JSON.parse(ev.data as string) as S2C;
+      if (m.t === 'save') saveProgress(m.id, m.p);
       if (m.t === 'pong') this.rtt = this.rtt ? this.rtt * 0.7 + (performance.now() - m.ts) * 0.3 : performance.now() - m.ts;
       for (const h of this.handlers) h(m);
     };
