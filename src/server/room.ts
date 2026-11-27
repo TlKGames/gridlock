@@ -60,7 +60,7 @@ export class Room {
     const save = loaded && loaded.seed === seed ? loaded : null;
     const w = (this.world = new World(seed));
     if (save) w.gameMinutes = save.gameMinutes;
-    this.profiles = save?.profiles ?? {};
+    this.profiles = Object.assign(Object.create(null), save?.profiles);
     this.pop = new Population(w);
     this.dispatch = new Dispatch(w);
     this.econ = new Economy(w);
@@ -74,7 +74,7 @@ export class Room {
     w.onExplosion = (x, y, r, by) => this.vaults.explosion(x, y, r, by);
     this.robberies = new Robberies(w, this.econ.owners, this.business);
     this.furniture = new StreetFurniture(w);
-    this.tables = new CardTables(w);
+    this.tables = new CardTables(w, (pl) => this.sendSave(pl));
     for (const [id, amount] of save?.safes ?? []) this.business.safes.set(id, amount);
     this.rounds = new Rounds(save?.mode ?? mode);
     for (const [id, name] of save?.owners ?? []) this.econ.owners.set(id, name);
@@ -114,7 +114,16 @@ export class Room {
     if (character) name = character.name;
     if (w.players.size >= RULES.maxPlayers) return 'Room is full.';
     if ([...w.players.values()].some((p) => p.name.toLowerCase() === name.toLowerCase())) return 'That name is already playing in this room.';
-    const key = name.toLowerCase();
+    const legacyName = name.toLowerCase();
+    const key = character ? `character:${character.id}` : `guest:${legacyName}`;
+    // Older rooms recorded only a display name. Bind that entry once on the first matching join.
+    if (this.profiles[legacyName]) {
+      this.profiles[key] ??= this.profiles[legacyName];
+      delete this.profiles[legacyName];
+    }
+    for (const [id, owner] of this.econ.owners) {
+      if (owner === legacyName) this.econ.owners.set(id, key);
+    }
     const roomProf = this.profiles[key];
     const c = character;
     const prof: SavedProfile = c
@@ -123,9 +132,9 @@ export class Room {
     const used = new Set([...w.players.values()].map((p) => p.color));
     const color = PLAYER_COLORS.find((c) => !used.has(c)) ?? PLAYER_COLORS[0];
     const pl: Player = {
-      id: w.id(), name, color, pid: 0, mode: Mode.Foot, queue: [], last: [0, 0, 0, 0, 0, 0, 0, -1], ack: 0,
+      id: w.id(), name, ownerKey: key, color, pid: 0, mode: Mode.Foot, queue: [], last: [0, 0, 0, 0, 0, 0, 0, -1], ack: 0,
       cash: prof.cash, bank: prof.bank ?? 0, felonies: { ...(prof.felonies ?? {}) }, felonyCd: {}, deaths: prof.deaths, heat: 0, wanted: 0, seenT: 0, lethal: false,
-      respawnT: 0, garage: [...prof.garage].filter((v) => v < VEHICLES.length), owned: [...prof.owned].filter((id) => this.econ.owners.get(id) === key),
+      respawnT: 0, garage: [...prof.garage].filter((v) => v < VEHICLES.length), owned: [...this.econ.owners].filter(([, owner]) => owner === key).map(([id]) => id),
       garageCar: 0, ping: 0, send: (m) => conn.send(JSON.stringify(m)), sendRaw: (s) => conn.send(s),
       spawnCdT: 0, bustT: 0, lastPlace: -1, gunCrimeT: -9, seenCheckT: 0, sent: new Map(), snapCount: 0,
       respect: { ...(prof.respect ?? {}) }, met: new Set(prof.met ?? []), mission: null, boothCd: new Map(), blownRun: 0, cell: newCell(w, prof.respect ?? {}), frags: 0, earned: 0, itTime: 0,
@@ -262,17 +271,22 @@ export class Room {
   }
 
   private sendOwners(): void {
-    this.world.broadcast({ t: 'owners', list: this.econ.ownerList() } satisfies S2C);
+    const names = new Map([...this.world.players.values()].map((p) => [p.ownerKey, p.name]));
+    this.world.broadcast({ t: 'owners', list: this.econ.ownerList((key) => names.get(key) ?? this.profiles[key]?.name ?? key) } satisfies S2C);
   }
 
   private storeProfile(pl: Player): void {
-    this.profiles[pl.name.toLowerCase()] = { cash: pl.cash, bank: pl.bank, garage: pl.garage, owned: pl.owned, felonies: pl.felonies, deaths: pl.deaths, respect: pl.respect, met: [...pl.met] };
+    this.profiles[pl.ownerKey] = { name: pl.name, cash: this.savedCash(pl), bank: pl.bank, garage: pl.garage, owned: pl.owned, felonies: pl.felonies, deaths: pl.deaths, respect: pl.respect, met: [...pl.met] };
     this.sendSave(pl);
   }
 
   /** Characters live in the player's browser: send their progress there to be saved. */
+  private savedCash(pl: Player): number {
+    return pl.cash + this.tables.refund(pl);
+  }
+
   private sendSave(pl: Player): void {
-    if (pl.character) pl.send({ t: 'save', id: pl.character.id, p: { ...progressOf(pl), last: lastOf(this.world, pl, this.code) } } satisfies S2C);
+    if (pl.character) pl.send({ t: 'save', id: pl.character.id, p: { ...progressOf(pl), cash: this.savedCash(pl), last: lastOf(this.world, pl, this.code) } } satisfies S2C);
   }
 
   persist(): void {

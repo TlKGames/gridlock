@@ -49,7 +49,7 @@ export class Robberies {
   /** What's left to take: the till, or the safe of a business someone else owns. */
   private available(k: number, i: Interior, robber: Player): { amount: number; owner: string | null } {
     const owner = i.property ? this.owners.get(i.place.id) ?? null : null;
-    if (owner) return { amount: owner === robber.name.toLowerCase() ? 0 : this.business.safes.get(i.place.id) ?? 0, owner };
+    if (owner) return { amount: owner === robber.ownerKey ? 0 : this.business.safes.get(i.place.id) ?? 0, owner };
     return { amount: this.tills.get(k) ?? this.spec(i)!.till, owner: null };
   }
 
@@ -98,7 +98,7 @@ export class Robberies {
       if (t < RULES.robStart) continue;
       this.covering.delete(pl.id);
       const { amount, owner } = this.available(k, i, pl);
-      if (owner && owner === pl.name.toLowerCase()) continue; // your own staff
+      if (owner && owner === pl.ownerKey) continue; // your own staff
       // Some clerks keep a gun under the counter.
       if (w.rng.next() < this.spec(i)!.fightBack) {
         const gun = RULES.counterGun;
@@ -163,7 +163,7 @@ export class Robberies {
     const owner = i.property ? this.owners.get(i.place.id) : undefined;
     if (owner && h.taken > 0) {
       for (const o of w.players.values()) {
-        if (o.name.toLowerCase() === owner) textTo(o, i.place.name, `We got held up. They took ${$(h.taken)} out of the safe.`);
+        if (o.ownerKey === owner) textTo(o, i.place.name, `We got held up. They took ${$(h.taken)} out of the safe.`);
       }
     }
   }

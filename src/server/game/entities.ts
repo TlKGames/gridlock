@@ -153,6 +153,7 @@ export interface Fire {
 }
 
 export interface Player {
+  ownerKey: string;
   id: number;
   name: string;
   color: string;

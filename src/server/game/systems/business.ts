@@ -34,7 +34,7 @@ export class Business {
 
   private ownerOf(propId: number): Player | undefined {
     const name = this.owners.get(propId);
-    for (const pl of this.w.players.values()) if (pl.name.toLowerCase() === name) return pl;
+    for (const pl of this.w.players.values()) if (pl.ownerKey === name) return pl;
     return undefined;
   }
 
@@ -121,7 +121,7 @@ export class Business {
       setTask(ped, 'stand');
       crew.push(ped.id);
     }
-    this.trouble.set(propId, { gang, owner: owner.name.toLowerCase(), crew, ends: w.time + RULES.troubleSeconds });
+    this.trouble.set(propId, { gang, owner: owner.ownerKey, crew, ends: w.time + RULES.troubleSeconds });
     textTo(owner, p.name, `Some ${factionName(gang)} are leaning on us. Deal with them or pay them off, or they'll clean out the safe.`);
     this.onChange(owner);
   }
@@ -131,7 +131,7 @@ export class Business {
     const w = this.w;
     const p = w.peds.get(pl.pid), place = this.place(propId);
     if (!p || p.dead || !place) return 'Not now.';
-    if (this.owners.get(propId) !== pl.name.toLowerCase()) return "It isn't yours.";
+    if (this.owners.get(propId) !== pl.ownerKey) return "It isn't yours.";
     const pos = w.pedPos(p);
     const counter = place.counter ? dist(pos.x, pos.y, place.counter.x, place.counter.y) : Infinity;
     if (Math.min(dist(pos.x, pos.y, place.x, place.y), counter) > 8) return 'Too far away.';
@@ -184,7 +184,7 @@ export class Business {
 
   /** What the owner's client shows: safes and trouble at their places. */
   profileOf(pl: Player): { safes: [number, number][]; trouble: [number, string, number][] } {
-    const name = pl.name.toLowerCase();
+    const name = pl.ownerKey;
     const mine = [...this.owners].filter(([, o]) => o === name).map(([id]) => id);
     return {
       safes: mine.filter((id) => this.spec(id).income > 0).map((id) => [id, this.safes.get(id) ?? 0]),

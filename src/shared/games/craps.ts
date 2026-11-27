@@ -145,15 +145,20 @@ export function crapsSettle(g: Craps, a: number, b: number): { back: number; won
   return { back, won, lost };
 }
 
+function ridesOut(b: CrapsBet): boolean {
+  return b.n !== undefined && ['pass', 'come', 'dont', 'dontcome'].includes(b.kind);
+}
+
+/** Cash already recoverable without rolling any unsettled contract bets. */
+export function crapsRefund(g: Craps): number {
+  return g.bets.reduce((sum, b) => ridesOut(b) ? sum : sum + b.amount + b.odds, 0);
+}
+
 /** Getting up from the table: what can come down comes back; bets already on a number ride the
  *  dice out (thrown for you) so walking away never beats the odds. */
 export function crapsWalkAway(g: Craps, rng: Rng): number {
-  let back = 0;
-  g.bets = g.bets.filter((b) => {
-    if ((b.kind === 'pass' || b.kind === 'come' || b.kind === 'dont' || b.kind === 'dontcome') && b.n !== undefined) return true;
-    back += b.amount + b.odds;
-    return false;
-  });
+  let back = crapsRefund(g);
+  g.bets = g.bets.filter(ridesOut);
   for (let i = 0; i < 500 && g.bets.length; i++) back += crapsRoll(g, rng).back;
   return back;
 }

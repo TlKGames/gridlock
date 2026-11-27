@@ -45,11 +45,11 @@ lobby.attach(bo.ws as never);
 bo.say(hello('Bo', code, false, character('bo1', 'Bo')));
 check(!bo.got.some((m) => m.t === 'reject'), 'Bo joins it by its code');
 const room = rooms.get(code)!.room;
-room.econ.owners.set(3, 'ana');
+room.econ.owners.set(3, 'character:ana1');
 room.world.gameMinutes = 777;
 ana.hangUp(); bo.hangUp();
 room.stop();
-check(loadRoom(code)?.owners.some(([id, who]) => id === 3 && who === 'ana') === true, 'leaving saves the room: who owns what');
+check(loadRoom(code)?.owners.some(([id, who]) => id === 3 && who === 'character:ana1') === true, 'leaving saves the room: who owns what');
 
 // The server lets the empty room go (as it does after ten idle minutes, or a restart).
 room.emptySince = 0;
@@ -62,7 +62,7 @@ lobby.attach(bo2.ws as never);
 bo2.say(hello('Bo', code, false, character('bo1', 'Bo'), { resume: true }));
 const again = rooms.get(code)?.room;
 check(!!again && !bo2.got.some((m) => m.t === 'reject'), 'Bo reopens it alone; nobody hosts it');
-check(again?.econ.owners.get(3) === 'ana' && Math.floor(again.world.gameMinutes) === 777, "and finds it as it was: Ana's property, the clock");
+check(again?.econ.owners.get(3) === 'character:ana1' && Math.floor(again.world.gameMinutes) === 777, "and finds it as it was: Ana's property, the clock");
 bo2.hangUp(); again?.stop();
 // Joining by its code (not Continue) opens it too.
 const bo3 = socket();

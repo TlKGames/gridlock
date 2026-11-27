@@ -1,7 +1,7 @@
 # Engine: one engine, many universes
 
 Decided with the user on 2026-11-26. GRIDLOCK's engine becomes shared: a player picks a
-"universe" at startup (Bayhaven today; later an original western, a sci-fi setting, ...), and the
+"universe" at startup (Bayhaven or Redrock Territory), and the
 map, models, vehicles, weapons, people, factions, missions, voices, radio and sounds all come from
 that universe's packs. The game feel never changes: top-down, GTA2 movement, camera and controls.
 Not a fork: one engine, every universe gets every engine fix.

@@ -62,7 +62,14 @@ wss.on('connection', (ws) => lobby.attach(ws));
 
 server.listen(PORT, () => {
   console.log(`GRIDLOCK server on http://localhost:${PORT}`);
-  for (const list of Object.values(networkInterfaces())) {
+  let interfaces: ReturnType<typeof networkInterfaces>;
+  try {
+    interfaces = networkInterfaces();
+  } catch {
+    // Some hosts allow listening but restrict network interface discovery.
+    return;
+  }
+  for (const list of Object.values(interfaces)) {
     for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal) console.log(`  LAN: http://${a.address}:${PORT}`);
   }
 });

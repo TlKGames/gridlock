@@ -10,7 +10,7 @@ import { UNIVERSE } from '../shared/packs';
  *  older saves are left unread. */
 export const SAVE_VERSION = 4;
 
-export interface SavedProfile { cash: number; bank?: number; garage: number[]; owned: number[]; felonies?: Record<string, number>; deaths: number; respect?: Record<string, number>; met?: string[] }
+export interface SavedProfile { name?: string; cash: number; bank?: number; garage: number[]; owned: number[]; felonies?: Record<string, number>; deaths: number; respect?: Record<string, number>; met?: string[] }
 
 export interface RoomSave {
   version: typeof SAVE_VERSION;
