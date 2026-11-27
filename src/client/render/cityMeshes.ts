@@ -19,6 +19,31 @@ import { Breakables } from '../../shared/world/breakables';
 /** A street lamp's head (`off` once the post is knocked down). */
 export interface LampSpot { x: number; y: number; off?: boolean }
 
+// Lowest exposed elevation on each face (north, east, south, west). The lower
+// wing or podium can hide just the bottom of an otherwise visible window.
+function wallBases(m: Mass, group: Mass[]): number[] {
+  const r = m.r;
+  const bases = [m.base, m.base, m.base, m.base];
+  for (const other of group) {
+    if (other === m) continue;
+    const o = other.r;
+    const coversX = o.x0 <= r.x0 && o.x1 >= r.x1;
+    const coversZ = o.y0 <= r.y0 && o.y1 >= r.y1;
+    const covered = [
+      coversX && o.y0 < r.y0 && o.y1 >= r.y0,
+      coversZ && o.x0 <= r.x1 && o.x1 > r.x1,
+      coversX && o.y0 <= r.y1 && o.y1 > r.y1,
+      coversZ && o.x0 < r.x0 && o.x1 >= r.x0,
+    ];
+    covered.forEach((yes, face) => {
+      if (yes) bases[face] = Math.max(bases[face], other.h);
+    });
+  }
+  return bases;
+}
+
+type CityMass = Mass & { owner: number; front: number; wallBases: number[] };
+
 export class CityMeshes {
   readonly uniforms: BuildingUniforms;
   readonly lamps: LampSpot[];
@@ -38,14 +63,14 @@ export class CityMeshes {
       gable: new Batch(UNIT.gable(), lambert()),
       glass: new Batch(UNIT.box(), glassMat),
     };
-    const masses: (Mass & { owner: number })[] = [];
+    const masses: CityMass[] = [];
     // Walk-in buildings can be hidden (the cutaway): their instances are tagged with the building.
     const open = new Set(city.interiors.map((i) => i.building));
     city.buildings.forEach((b, bi) => {
       const owner = open.has(bi) ? bi : -1;
       const ms = massesFor(b, city.seed, bi);
-      masses.push(...ms.map((m) => ({ ...m, owner })));
       const lot = city.lots[b.lot];
+      masses.push(...ms.map((m) => ({ ...m, owner, front: lot?.front ?? -1, wallBases: wallBases(m, ms) })));
       for (const batch of Object.values(out)) batch.owner = owner;
       const deco = decorate(b, lot, ms, rng, out);
       // Gang turf: the model's paintable spots, for the graffiti layer.
@@ -77,14 +102,15 @@ export class CityMeshes {
   }
 
   /** One instanced mesh per map tile so off-screen blocks are culled (also from the shadow pass). */
-  private buildMasses(scene: THREE.Scene, masses: (Mass & { owner: number })[], rng: Rng): BuildingUniforms {
+  private buildMasses(scene: THREE.Scene, masses: CityMass[], rng: Rng): BuildingUniforms {
     const { mat, uniforms } = buildingMaterial();
     const base = UNIT.box();
     const m4 = new THREE.Matrix4(), c = new THREE.Color();
     for (const group of byTile(masses, (ms) => [(ms.r.x0 + ms.r.x1) / 2, (ms.r.y0 + ms.r.y1) / 2]).values()) {
       const n = group.length;
       const geo = base.clone();
-      const wall = new Float32Array(n * 3), roof = new Float32Array(n * 3), win = new Float32Array(n * 3);
+      const wall = new Float32Array(n * 3), roof = new Float32Array(n * 3), win = new Float32Array(n * 4);
+      const bases = new Float32Array(n * 4);
       const mesh = new THREE.InstancedMesh(geo, mat, n);
       group.forEach((ms, i) => {
         const r = ms.r;
@@ -94,11 +120,13 @@ export class CityMeshes {
         // Color.set() converts sRGB hex to the linear working space already.
         c.set(ms.wall); wall.set([c.r, c.g, c.b], i * 3);
         c.set(ms.roof); roof.set([c.r, c.g, c.b], i * 3);
-        win.set([ms.win, rng.next() * 100, ms.kind], i * 3);
+        win.set([ms.win, rng.next() * 100, ms.kind, ms.front], i * 4);
+        bases.set(ms.wallBases, i * 4);
       });
       geo.setAttribute('aWall', new THREE.InstancedBufferAttribute(wall, 3));
       geo.setAttribute('aRoof', new THREE.InstancedBufferAttribute(roof, 3));
-      geo.setAttribute('aWin', new THREE.InstancedBufferAttribute(win, 3));
+      geo.setAttribute('aWin', new THREE.InstancedBufferAttribute(win, 4));
+      geo.setAttribute('aWallBases', new THREE.InstancedBufferAttribute(bases, 4));
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();

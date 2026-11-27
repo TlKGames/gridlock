@@ -3,6 +3,7 @@
 // surfaces (gravel/tar for flat roofs, corrugated metal for industrial ones).
 import * as THREE from 'three';
 import { WORLD } from '../../shared/world/worldSpec';
+import { FLOOR_H } from '../../shared/world/levels';
 
 export interface BuildingUniforms { uNight: { value: number } }
 
@@ -16,10 +17,17 @@ export function buildingMaterial(): { mat: THREE.MeshLambertMaterial; uniforms: 
     // Interpolating the per-building seed can change the window hash within a single pane.
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
-        attribute vec3 aWall; attribute vec3 aRoof; attribute vec3 aWin;
-        varying vec3 vWall; varying vec3 vRoof; flat varying vec3 vWin; varying vec3 vGW; varying vec3 vGN;`)
+        attribute vec3 aWall; attribute vec3 aRoof; attribute vec4 aWin; attribute vec4 aWallBases;
+        varying vec3 vWall; varying vec3 vRoof; flat varying vec3 vWin; varying vec3 vGW; varying vec3 vGN;
+        varying float vAcross; flat varying vec4 vFace;`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
-        vWall = aWall; vRoof = aRoof; vWin = aWin;
+        vWall = aWall; vRoof = aRoof;
+        bool side = abs(normal.x) > 0.5;
+        int face = side ? (normal.x > 0.0 ? 1 : 3) : (normal.z > 0.0 ? 2 : 0);
+        vWin = vec3(aWin.x, aWin.y + float(face) * 13.0, aWin.z);
+        float width = side ? instanceMatrix[2].z : instanceMatrix[0].x;
+        vAcross = ((side ? position.z : position.x) + 0.5) * width;
+        vFace = vec4(width, instanceMatrix[3].y + instanceMatrix[1].y, aWallBases[face], float(face) == aWin.w ? 1.0 : 0.0);
         vec4 gw = modelMatrix * instanceMatrix * vec4(position, 1.0);
         vGW = gw.xyz;
         vGN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);`);
@@ -27,6 +35,7 @@ export function buildingMaterial(): { mat: THREE.MeshLambertMaterial; uniforms: 
       .replace('#include <common>', `#include <common>
         uniform float uNight;
         varying vec3 vWall; varying vec3 vRoof; flat varying vec3 vWin; varying vec3 vGW; varying vec3 vGN;
+        varying float vAcross; flat varying vec4 vFace;
         float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vnoise(vec2 p) {
           vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -64,19 +73,30 @@ export function buildingMaterial(): { mat: THREE.MeshLambertMaterial; uniforms: 
             float u = abs(vGN.x) > 0.5 ? vGW.z : vGW.x;
             float v = vGW.y;
             float density = vWin.x;
-            float floorH = kind > 1.5 ? 2.8 : 3.3;
-            vec2 cell = vec2(floor(u / 2.6), floor(v / floorH));
-            vec2 f = vec2(fract(u / 2.6), fract(v / floorH));
+            // Fit complete, centred bays to this wall. Density sets the spacing,
+            // while occupancy only determines whether a finished pane is lit.
+            float pitch = mix(5.8, 2.6, density);
+            float bays = max(1.0, floor(vFace.x / pitch + 0.5));
+            float bayWidth = vFace.x / bays;
+            float bay = vAcross / bayWidth;
+            float paneWidth = min(kind > 1.5 ? 1.3 : 1.65, bayWidth - 0.9);
+            float floorH = kind > 1.5 ? min(2.8, vFace.y) : ${FLOOR_H};
+            vec2 cell = vec2(floor(bay), floor(v / floorH));
+            vec2 f = vec2(0.5 + (fract(bay) - 0.5) * bayWidth / max(0.1, paneWidth), fract(v / floorH));
+            float bottom = cell.y * floorH;
+            float fits = step(0.7, paneWidth) * step(0.101, density)
+                       * step(vFace.z + 0.25, bottom + 0.24 * floorH)
+                       * step(bottom + 0.88 * floorH + 0.15, vFace.y);
           #ifdef OLD_ERA
             // Clapboard siding: overlapping boards, each a little different.
             float board = floor(v / 0.26);
             col *= 0.9 + 0.12 * h21(vec2(board, floor(u / 4.0)));
             col *= 1.0 - 0.14 * step(0.82, fract(v / 0.26));
             // Small sash windows: dark panes, a timber frame darker than the wall, a muntin cross.
-            float inWin = step(0.3, f.x) * step(f.x, 0.7) * step(0.3, f.y) * step(f.y, 0.78) * step(0.9, v);
-            float frame = step(0.26, f.x) * step(f.x, 0.74) * step(0.26, f.y) * step(f.y, 0.82) * step(0.9, v) * (1.0 - inWin);
+            float inWin = step(0.12, f.x) * step(f.x, 0.88) * step(0.3, f.y) * step(f.y, 0.78);
+            float frame = step(0.06, f.x) * step(f.x, 0.94) * step(0.26, f.y) * step(f.y, 0.82) * (1.0 - inWin);
             float muntin = inWin * max(step(abs(f.x - 0.5), 0.015), step(abs(f.y - 0.54), 0.015));
-            float wins = step(1.0 - density, h21(cell * 0.37 + vWin.y));
+            float wins = fits;
             float store = 0.0;
             vec3 glass = mix(vec3(0.04, 0.035, 0.03), vec3(0.16, 0.15, 0.13), 0.3 * h21(cell + 3.1));
             col = mix(col, col * 0.55, frame * wins);
@@ -89,11 +109,11 @@ export function buildingMaterial(): { mat: THREE.MeshLambertMaterial; uniforms: 
             // Brick/panel texture and floor bands.
             col *= 0.93 + 0.07 * vnoise(vec2(u * 1.7, v * 3.3));
             col *= 1.0 - 0.1 * step(f.y, 0.06) * step(3.0, v);
-            float inWin = step(0.2, f.x) * step(f.x, 0.8) * step(0.28, f.y) * step(f.y, 0.84) * step(2.6, v);
-            float frame = step(0.16, f.x) * step(f.x, 0.84) * step(0.24, f.y) * step(f.y, 0.88) * step(2.6, v) * (1.0 - inWin);
-            float wins = step(1.0 - density, h21(cell * 0.37 + vWin.y));
+            float inWin = step(0.04, f.x) * step(f.x, 0.96) * step(0.28, f.y) * step(f.y, 0.84);
+            float frame = step(0.0, f.x) * step(f.x, 1.0) * step(0.24, f.y) * step(f.y, 0.88) * (1.0 - inWin);
+            float wins = fits * ((cell.y >= 1.0 || kind > 1.5) ? 1.0 : 0.0);
             // Storefront glass on the ground floor of dense buildings.
-            float store = step(v, 2.7) * step(0.6, density) * step(0.6, v) * step(0.08, f.x) * step(f.x, 0.92);
+            float store = fits * vFace.w * step(0.6, density) * step(v, 2.7) * step(0.6, v) * step(0.12, fract(bay)) * step(fract(bay), 0.88);
             vec3 glass = mix(vec3(0.07, 0.09, 0.12), vec3(0.32, 0.42, 0.52), 0.25 + 0.3 * density + 0.15 * h21(cell + 3.1));
             col = mix(col, col * 1.18, frame * wins);
             col = mix(col, glass, max(inWin * wins, store) * 0.9);
