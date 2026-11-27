@@ -21,7 +21,8 @@ export const speedboat = (): Part[] => [
 
 /** A small open skiff: a tiller outboard, two thwarts. */
 export const skiff = (): Part[] => [
-  p([[-0.5, 0.0], [0.3, 0.0], [0.5, 0.58], [0.5, 0.7], [-0.5, 0.7]], -0.5, 0.5, 'body'),
+  // The bevel adds 0.04 of hull height. Let the floorboards cover it and the benches sit above them.
+  p([[-0.5, 0.0], [0.3, 0.0], [0.5, 0.56], [0.5, 0.60], [-0.5, 0.60]], -0.5, 0.5, 'body'),
   b(-0.46, 0.34, -0.42, 0.42, 0.62, 0.66, '#3a3f44'),       // floorboards
   b(-0.12, -0.02, -0.42, 0.42, 0.66, 0.74, 'trim'),         // thwarts
   b(0.18, 0.26, -0.42, 0.42, 0.66, 0.74, 'trim'),
@@ -30,12 +31,12 @@ export const skiff = (): Part[] => [
 
 /** A cabin cruiser: white hull, teak deck, a cabin with a windscreen and a flybridge rail. */
 export const cruiser = (): Part[] => [
-  p([[-0.5, 0.0], [0.26, 0.0], [0.5, 0.32], [0.5, 0.38], [-0.5, 0.38]], -0.5, 0.5, 'white'),
+  p([[-0.5, 0.0], [0.26, 0.0], [0.5, 0.32], [0.5, 0.36], [-0.5, 0.36]], -0.5, 0.5, 'white'),
   b(-0.5, 0.4, -0.505, 0.505, 0.18, 0.27, 'body'),          // hull band
   b(-0.5, 0.46, -0.48, 0.48, 0.38, 0.41, '#b89a6a'),        // teak deck
-  p([[-0.3, 0.4], [0.18, 0.4], [0.3, 0.62], [-0.3, 0.66]], -0.38, 0.38, 'white'), // cabin
+  p([[-0.3, 0.4], [0.18, 0.4], [0.3, 0.62], [0.0, 0.64], [-0.3, 0.64]], -0.38, 0.38, 'white'), // cabin
   b(-0.26, 0.24, -0.385, 0.385, 0.48, 0.58, 'glass'),       // cabin windows
   b(0.18, 0.28, -0.34, 0.34, 0.5, 0.62, 'glass'),           // windscreen
-  b(-0.28, -0.04, -0.3, 0.3, 0.66, 0.72, 'trim'),           // flybridge rail
+  b(-0.28, -0.04, -0.3, 0.3, 0.664, 0.72, 'trim'),           // flybridge rail
   b(-0.54, -0.5, -0.4, 0.4, 0.12, 0.17, '#b89a6a'),         // swim platform
 ];
