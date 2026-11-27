@@ -2,7 +2,7 @@
 // Body (torso, belt, head, hair/hat), each limb (with hand/shoe) are merged vertex-coloured meshes.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HAIRSTYLES } from '../../shared/packs/hairstyles';
+import { visibleHair } from '../../shared/packs/hairstyles';
 import { hash32 } from '../../shared/math';
 import { CHARACTER_LOOKS, type CharLook, HAIR, PEDS, SHOES, WEAPONS } from '../../shared/packs';
 import { WORLD } from '../../shared/world/worldSpec';
@@ -105,7 +105,7 @@ export function makePed(id: number, arch: number, playerColor: string | null, ch
       cbox(0.011, 0.012, 0.052, 0.138, 1.66, 0, new THREE.Color(skin).multiplyScalar(0.48).getStyle()),
     ];
     if (hat) parts.push(cbox(0.3, 0.09, 0.27, 0, 1.88, 0, hat), cbox(0.12, 0.03, 0.25, 0.17, 1.84, 0, hat));
-    else for (const piece of HAIRSTYLES[style].pieces) parts.push(cbox(...piece, hair));
+    for (const piece of visibleHair(style, !!hat)) parts.push(cbox(...piece, hair));
     return parts;
   });
   const legGeo = cached(`l:${bottom}:${shoes}`, () => [cbox(0.17, 0.78, 0.17, 0, -0.39, 0, bottom), cbox(0.25, 0.09, 0.16, 0.04, -0.82, 0, shoes)]);

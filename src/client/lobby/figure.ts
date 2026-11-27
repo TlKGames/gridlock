@@ -1,5 +1,5 @@
 // Front-view figure of a character look, drawn on a canvas (lobby cards and the creator preview).
-import { HAIRSTYLES, type HairBox } from '../../shared/packs/hairstyles';
+import { visibleHair, type HairBox } from '../../shared/packs/hairstyles';
 import { CHARACTER_LOOKS, type CharLook } from '../../shared/packs';
 
 /** Draws on a 10 × 20 unit grid scaled to the canvas. */
@@ -23,7 +23,7 @@ export function drawFigure(c: HTMLCanvasElement, look: CharLook): void {
   r(2.6, 11.6, 7.4, 12.3, '#2a2622');                              // belt
   r(4.3, 5.6, 5.7, 6.7, skin);                                     // neck
   // Project the hair pieces from the front, with the head occluding the nape.
-  const hairPieces = hat ? [] : HAIRSTYLES[look.hairStyle].pieces;
+  const hairPieces = visibleHair(look.hairStyle, !!hat);
   const strand = ([, h, w, , y, z]: HairBox) =>
     r(5 - (z + w / 2) * 15, 4 - (y + h / 2 - 1.72) * 13.3,
       5 - (z - w / 2) * 15, 4 - (y - h / 2 - 1.72) * 13.3, hair);
