@@ -1,6 +1,7 @@
 // Bayhaven: the original GRIDLOCK city. A ~2 km island of districts, three crews, the law up to
 // the army. Its content (calls, voices, radio) still lives at the project's top-level content/,
 // its models in src/client/models and voices in src/client/voice (see ./client.ts).
+import { HAIRSTYLES } from '../../shared/packs/hairstyles';
 import type { CharacterFile, PlayerFile, Universe } from '../../shared/packs/types';
 import benny from '../../../content/characters/benny_lutz/benny_lutz.json';
 import danny from '../../../content/characters/danny_keogh/danny_keogh.json';
@@ -60,7 +61,7 @@ export const BAYHAVEN: Universe = {
   looks: {
     skin: SKIN,
     hair: HAIR,
-    hairStyle: ['Short', 'Long', 'Shaved'],
+    hairStyle: HAIRSTYLES.map(style => style.name),
     top: ['#f2f2ee', '#16171a', '#c62a22', '#1f5bff', '#2bb34a', '#e3b30c', '#8a6db0', '#e04e8c', '#d9661b', '#5c7fa3', '#6b5a45', '#9aa5ad'],
     bottom: ['#2c3e57', '#16171a', '#3a3a3a', '#6b5a45', '#e8e2d0', '#25324a', '#7a7466', '#5a1e14'],
     hat: ['', '#16171a', '#c62a22', '#1f5bff', '#e8e2d0', '#e3b30c', '#3c3f2e'],

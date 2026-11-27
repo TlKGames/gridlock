@@ -1,4 +1,5 @@
 // Front-view figure of a character look, drawn on a canvas (lobby cards and the creator preview).
+import { HAIRSTYLES, type HairBox } from '../../shared/packs/hairstyles';
 import { CHARACTER_LOOKS, type CharLook } from '../../shared/packs';
 
 /** Draws on a 10 × 20 unit grid scaled to the canvas. */
@@ -21,14 +22,19 @@ export function drawFigure(c: HTMLCanvasElement, look: CharLook): void {
   r(1.5, 11.2, 2.5, 12.2, skin); r(7.5, 11.2, 8.5, 12.2, skin);    // hands
   r(2.6, 11.6, 7.4, 12.3, '#2a2622');                              // belt
   r(4.3, 5.6, 5.7, 6.7, skin);                                     // neck
-  r(3.2, 2.2, 6.8, 5.8, skin);                                     // head
-  r(3.9, 3.7, 4.5, 4.2, '#1a1a1a'); r(5.5, 3.7, 6.1, 4.2, '#1a1a1a'); // eyes
+  // Project the hair pieces from the front, with the head occluding the nape.
+  const hairPieces = hat ? [] : HAIRSTYLES[look.hairStyle].pieces;
+  const strand = ([, h, w, , y, z]: HairBox) =>
+    r(5 - (z + w / 2) * 15, 4 - (y + h / 2 - 1.72) * 13.3,
+      5 - (z - w / 2) * 15, 4 - (y - h / 2 - 1.72) * 13.3, hair);
+  for (const piece of hairPieces) if (piece[3] + piece[0] / 2 <= 0.135) strand(piece);
+  r(3.2, 2.2, 6.8, 5.8, skin);
+  r(3.9, 3.5, 4.4, 3.9, '#29221f'); r(5.6, 3.5, 6.1, 3.9, '#29221f');
+  r(4.65, 4.78, 5.35, 4.99, 'rgba(45,25,20,0.48)');
+  for (const piece of hairPieces) if (piece[3] + piece[0] / 2 > 0.135) strand(piece);
   if (hat) {
     r(3.1, 0.6, 6.9, 2.2, hat);
     r(2.6, 1.9, 7.4, 2.6, hat);
-  } else if (look.hairStyle !== 2) {
-    r(3.0, 1.5, 7.0, 2.7, hair);
-    if (look.hairStyle === 1) { r(2.9, 2.2, 3.5, 6.4, hair); r(6.5, 2.2, 7.1, 6.4, hair); }
   }
 }
 

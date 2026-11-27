@@ -18,7 +18,7 @@ function playSample(voice: string): void {
   void sampleAudio.play().catch(() => { /* blocked or missing: stays quiet */ });
 }
 
-const LABEL: Record<LookPart, string> = { skin: 'Skin', hair: 'Hair colour', hairStyle: 'Hair', top: 'Top', bottom: 'Trousers', hat: 'Hat' };
+const LABEL: Record<LookPart, string> = { skin: 'Skin', hair: 'Hair colour', hairStyle: 'Hairstyle', top: 'Top', bottom: 'Trousers', hat: 'Hat' };
 const rnd = (n: number) => Math.floor(Math.random() * n);
 const pick = <T>(a: T[]): T => a[rnd(a.length)];
 
@@ -169,13 +169,21 @@ export class Creator {
   private partRow(part: LookPart): HTMLElement {
     const box = el('div', 'look-part');
     box.appendChild(el('small', 'look-label', LABEL[part]));
-    const row = el('div', part === 'hairStyle' ? 'segmented' : 'swatches');
+    if (part === 'hairStyle') {
+      const select = el('select', '');
+      select.setAttribute('aria-label', LABEL[part]);
+      CHARACTER_LOOKS[part].forEach((name, i) => select.add(new Option(name, String(i))));
+      select.value = String(this.draft.look.hairStyle);
+      select.addEventListener('change', () => this.apply({ ...this.draft, look: { ...this.draft.look, hairStyle: Number(select.value) } }));
+      box.appendChild(select);
+      return box;
+    }
+    const row = el('div', 'swatches');
     CHARACTER_LOOKS[part].forEach((v, i) => {
       const on = this.draft.look[part] === i;
-      const text = part === 'hairStyle' ? v : '';
-      const b = el('button', `${part === 'hairStyle' ? 'seg' : 'sw'}${on ? ' on' : ''}${part === 'hat' && i === 0 ? ' none' : ''}`, text);
-      if (!text && v) b.style.background = v;
-      b.title = part === 'hat' && i === 0 ? 'No hat' : text || LABEL[part];
+      const b = el('button', `sw${on ? ' on' : ''}${part === 'hat' && i === 0 ? ' none' : ''}`);
+      if (v) b.style.background = v;
+      b.title = part === 'hat' && i === 0 ? 'No hat' : LABEL[part];
       b.addEventListener('click', () => { if (!on) this.apply({ ...this.draft, look: { ...this.draft.look, [part]: i } }); });
       row.appendChild(b);
     });
