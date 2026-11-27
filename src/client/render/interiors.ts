@@ -1,7 +1,5 @@
-// Walk-in ground floors (shared/world/interiors.ts) and the cutaway. The floors, walls cut at waist
-// height, furniture and the solid rest of each building (a dark cut block) always sit inside their
-// building, invisible under the roof. Stand at or in a walk-in place on foot and that building is
-// hidden (render/hideable.ts): you see the floor plan from the same camera, in the same world.
+// Ground-floor cutaways. The interior perimeter shares the exterior footprint:
+// show its floor plan only while the building shell is hidden.
 import * as THREE from 'three';
 import type { City } from '../../shared/world/cityTypes';
 import { FLAT_PROPS as FLAT, type Interior, type PropKind } from '../../shared/world/interiors';
@@ -54,6 +52,7 @@ const NEAR = 3.2;
 
 export class Interiors {
   private open = -1;
+  private rooms = new Map<number, THREE.Group>();
   /** Vault doors by interior index (hidden when blown open). */
   private vaultDoors = new Map<number, THREE.Object3D>();
 
@@ -68,31 +67,35 @@ export class Interiors {
     // Vault doors: a thick steel slab with a wheel, standing in the gap in the vault wall.
     const steel = new THREE.MeshStandardMaterial({ color: '#7d848c', metalness: 0.7, roughness: 0.35 });
     const dark = new THREE.MeshLambertMaterial({ color: '#3a3e44' });
-    city.interiors.forEach((i, k) => {
-      if (!i.vault) return;
-      const d = i.vault.door, g = new THREE.Group();
-      const slab = new THREE.Mesh(UNIT.box(), steel);
-      slab.scale.set(d.x1 - d.x0, 3.0, d.y1 - d.y0);
-      slab.castShadow = true;
-      const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.07, 6, 16).rotateX(Math.PI / 2), dark);
-      wheel.position.y = 3.05;
-      g.add(slab, wheel);
-      g.position.set((d.x0 + d.x1) / 2, 0, (d.y0 + d.y1) / 2);
-      scene.add(g);
-      this.vaultDoors.set(k, g);
-    });
-    const box = new Batch(UNIT.box(), lambert());
+    const material = lambert();
     const felt = new Set(city.tables.map((t) => t.prop).filter((p): p is NonNullable<typeof p> => !!p));
-    const add = (r: { x0: number; y0: number; x1: number; y1: number }, y: number, h: number, color: string) =>
-      box.add((r.x0 + r.x1) / 2, y, (r.y0 + r.y1) / 2, r.x1 - r.x0, h, r.y1 - r.y0, color);
-    for (const i of city.interiors) {
+    city.interiors.forEach((i, k) => {
+      const group = new THREE.Group();
+      group.visible = false;
+      this.rooms.set(i.building, group);
+      scene.add(group);
+      if (i.vault) {
+        const d = i.vault.door, g = new THREE.Group();
+        const slab = new THREE.Mesh(this.unit, steel);
+        slab.scale.set(d.x1 - d.x0, 3.0, d.y1 - d.y0);
+        slab.castShadow = true;
+        const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.07, 6, 16).rotateX(Math.PI / 2), dark);
+        wheel.position.y = 3.05;
+        g.add(slab, wheel);
+        g.position.set((d.x0 + d.x1) / 2, 0, (d.y0 + d.y1) / 2);
+        group.add(g);
+        this.vaultDoors.set(k, g);
+      }
+      const box = new Batch(this.unit, material);
+      const add = (r: Interior['room'], y: number, h: number, color: string) =>
+        box.add((r.x0 + r.x1) / 2, y, (r.y0 + r.y1) / 2, r.x1 - r.x0, h, r.y1 - r.y0, color);
       add(i.room, 0, 0.06, FLOOR[i.layout]);
       for (const w of i.walls) add(w.rect, 0, i.wallH, WALL[i.layout]);
       for (const r of i.rest) add(r.rect, 0, i.wallH, CUT);
       // Game tables (world/tables.ts) wear green baize.
       for (const p of i.props) if (!furnished.has(p)) add(p.rect, FLAT.has(p.kind) ? 0.06 : 0, p.h, p.kind === 'table' && felt.has(p) ? FELT : PROP[p.kind]);
-    }
-    box.build(scene);
+      box.build(group);
+    });
   }
 
   /** Opens the walk-in place you're at or in (on foot); closes it again when you leave. (x, y) is
@@ -108,8 +111,14 @@ export class Interiors {
     }
     this.showFloor(f > 0 && inside ? inside : null, f);
     if (want === this.open) return;
-    if (this.open >= 0) setHidden(this.open, false);
-    if (want >= 0) setHidden(want, true);
+    if (this.open >= 0) {
+      this.rooms.get(this.open)!.visible = false;
+      setHidden(this.open, false);
+    }
+    if (want >= 0) {
+      setHidden(want, true);
+      this.rooms.get(want)!.visible = true;
+    }
     this.open = want;
   }
 

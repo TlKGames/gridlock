@@ -45,7 +45,7 @@ export class Batch {
     return this.items.length;
   }
 
-  build(scene: THREE.Scene): THREE.InstancedMesh[] {
+  build(scene: THREE.Object3D): THREE.InstancedMesh[] {
     const meshes: THREE.InstancedMesh[] = [];
     for (const group of byTile(this.items, (it) => [it.x, it.z]).values()) {
       const mesh = new THREE.InstancedMesh(this.geo, this.mat, group.length);
