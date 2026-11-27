@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { type CharLook, VEHICLES, WEAPONS } from '../../shared/packs';
 import { EK, PF, PK, VF } from '../../shared/protocol';
-import { astride } from '../../shared/sim/kinds';
+import { astride, onRails } from '../../shared/sim/kinds';
 import { animateLegs } from './legs';
 import { materialOf } from '../../shared/materials';
 import type { EntityStore, ViewEntity } from '../net/entities';
@@ -15,6 +15,7 @@ import { animatePed, HIP_H, makePed, muzzleOf, PED_S, type PedView, ridePed, set
 import { lampMaterial, makeVehicle, showDamage, sirenMats, type VehicleView } from './vehicleMesh';
 import { decodeDamage } from './vehicleDamage';
 import { Skids } from './skids';
+import type { RailFade } from './railFade';
 import { floatBoat } from './boats';
 
 export interface OwnState { pid: number; vid: number; x: number; y: number; angle: number; alt: number; driving: boolean; vx: number; vy: number; trailer?: number }
@@ -93,7 +94,7 @@ export class WorldView {
   /** Tyre marks and smoke; `skids.squeal` is the hardest slide this frame, for the tyre sound. */
   readonly skids = new Skids();
 
-  constructor(private scene: THREE.Scene, private fx: Effects, private lamps: { x: number; y: number; off?: boolean }[]) {}
+  constructor(private scene: THREE.Scene, private fx: Effects, private lamps: { x: number; y: number; off?: boolean }[], private railFade?: RailFade) {}
 
   sync(store: EntityStore, dt: number, own: OwnState | null, tags: Map<number, PlayerTag>, night: number, view: { x0: number; y0: number; x1: number; y1: number }): void {
     this.time += dt;
@@ -249,11 +250,15 @@ export class WorldView {
     // a horse lying in its own colours.
     const mat = materialOf(spec);
     const charred = wreck && !!mat.charred;
+    const cutaway = this.railFade && onRails(spec) ? this.railFade : undefined;
     const key = `${type}:${color}:${charred}`;
     let v = this.vehs.get(e.id);
     if (!v || v.key !== key) {
       if (v) this.scene.remove(v.root);
       v = makeVehicle(type, color, charred);
+      if (cutaway) v.root.traverse((part) => {
+        if (part instanceof THREE.Mesh) part.material = cutaway.material(part.material);
+      });
       // Mounts roll onto their side and rear in their own frame (heading first); others keep the default.
       if (mat.liesDown || spec.temper) v.root.rotation.order = 'YXZ';
       this.vehs.set(e.id, v);
@@ -308,7 +313,10 @@ export class WorldView {
       this.fx.glow.put(x, y, alt - above + 0.1, 9 + night * 6, 1, 0, col[0], col[1], col[2], 0.18 + night * 0.25);
     }
     const lit = !!(flags & VF.lights) && !wreck;
-    for (const m of v.lamps) m.material = lampMaterial(v, m, lit);
+    for (const m of v.lamps) {
+      const lamp = lampMaterial(v, m, lit);
+      m.material = cutaway?.material(lamp) ?? lamp;
+    }
     putCarLights(this.fx.beams, this.fx.glow, spec, type, x, y, a, alt, above, trailerAngle, flags, night, dents);
     // Smoke from under the bonnet: a badly hurt vehicle, or a smashed front end (the engine's there).
     const steam = dmg >= 2 || dents[0] >= 2;
