@@ -119,7 +119,7 @@ export class Game {
     const canvas = document.getElementById('view') as HTMLCanvasElement;
     this.stage = new Stage(canvas);
     this.cam = new ChaseCamera(this.stage.camera);
-    this.ground = new Ground(this.stage.scene, this.map, this.stage.renderer.capabilities.getMaxAnisotropy());
+    this.ground = new Ground(this.stage.scene, this.map, this.stage.renderer);
     this.tumbleweeds = new Tumbleweeds(this.stage.scene, this.map);
     const meshes = new CityMeshes(this.stage.scene, city);
     this.fx = new Effects(this.stage.scene, this.stage.flash);

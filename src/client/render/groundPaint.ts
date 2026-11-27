@@ -7,8 +7,10 @@ import { WORLD } from '../../shared/world/worldSpec';
 import { hasWild, paintRelief } from './groundRelief';
 import { boardwalk, grid, paintLot } from './lotPaint';
 
-export const CHUNK = 128;
-export const PX = 4; // pixels per metre
+// Keep full-detail texture uploads at 512 × 512 as the camera crosses the city.
+export const CHUNK = 64;
+export const GROUND_PX = 8; // full-detail pixels per metre
+export const PREVIEW_PX = 4;
 const ASPHALT = '#3b3e43';
 const ASPHALT_ART = '#36393e';
 const WATER = '#1f4250';
@@ -34,13 +36,13 @@ function noisePattern(): HTMLCanvasElement {
 
 /** Paints one chunk's ground. A generator: it pauses now and then (render/ground.ts spreads a
  *  chunk's painting over frames). */
-export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCanvasElement): Generator<void> {
+export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCanvasElement, px = GROUND_PX): Generator<void> {
   const city = map.city;
-  const size = CHUNK * PX;
+  const size = CHUNK * px;
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   const X0 = cx * CHUNK, Y0 = cy * CHUNK, X1 = X0 + CHUNK, Y1 = Y0 + CHUNK;
-  ctx.setTransform(PX, 0, 0, PX, -X0 * PX, -Y0 * PX);
+  ctx.setTransform(px, 0, 0, px, -X0 * px, -Y0 * px);
   const inView = (x0: number, y0: number, x1: number, y1: number) => x1 >= X0 && x0 <= X1 && y1 >= Y0 && y0 <= Y1;
   const rect = (x0: number, y0: number, x1: number, y1: number, c: string) => { ctx.fillStyle = c; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); };
 
@@ -72,6 +74,7 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
       }
     }
   }
+  yield;
   // Roads (trails: packed dirt).
   for (const s of city.segs) {
     const hw = s.width / 2;
@@ -91,6 +94,7 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
   }
   if (WORLD.modern) for (const s of city.segs) if (!s.trail) roadWear(ctx, s, inView);
 
+  yield;
   // Blocks and lots.
   for (const b of city.blocks) {
     const br = b.rect;
@@ -115,11 +119,15 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
     rect(p.x0, p.y0, p.x1, p.y1, WATER);
   }
 
+  yield;
   if (WORLD.modern) paintMarkings(ctx, map, inView);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 0.12;
   ctx.globalCompositeOperation = 'overlay';
-  ctx.fillStyle = ctx.createPattern(noisePattern(), 'repeat')!;
+  const pattern = ctx.createPattern(noisePattern(), 'repeat')!;
+  // The grain tile covers 64 world metres at either resolution.
+  pattern.setTransform(new DOMMatrix().scale(px / 4));
+  ctx.fillStyle = pattern;
   ctx.fillRect(0, 0, size, size);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
