@@ -7,6 +7,7 @@ import type { City } from '../../shared/world/cityTypes';
 import { WORLD } from '../../shared/world/worldSpec';
 import { PLATFORM_HALF, railColumns, type Railway, VIADUCT_HALF } from '../../shared/world/railgen';
 import { profileZ, type Way } from '../../shared/world/wayTypes';
+import { RailFade } from './railFade';
 
 const STEP = 3;
 
@@ -76,10 +77,12 @@ function signTexture(text: string): THREE.CanvasTexture {
 }
 
 export class RailwayView {
+  readonly fade?: RailFade;
   constructor(scene: THREE.Scene, city: City, isWater: (x: number, y: number) => boolean, aniso = 8) {
     const r = city.railway;
     if (!r) return;
     const way = city.ways.find((w) => w.kind === 'rail' && w.strip === r.strip);
+    if (r.strip && way) this.fade = new RailFade(r, way);
     const lam = (color: string, map?: THREE.Texture) => new THREE.MeshLambertMaterial(map ? { map, side: THREE.DoubleSide } : { color, side: THREE.DoubleSide });
     const across = r.strip ? 2 * VIADUCT_HALF : 2 * (Math.max(...r.tracks.map(Math.abs)) + 1.8);
     const center = r.strip ? 0 : (r.tracks[0] + r.tracks[r.tracks.length - 1]) / 2;
@@ -110,7 +113,7 @@ export class RailwayView {
     // An older era's platforms are planks under a shingled roof (WORLD.modern off).
     const deck = WORLD.modern ? '#9a958c' : '#7a5a3a', cover = WORLD.modern ? '#2f3a44' : '#4a3a2a';
     for (const [m, mat] of [[bed, lam('', tex)], [concrete, lam(deck)], [steel, lam('#4f5d6b')], [roof, lam(cover)]] as const) {
-      if (m.pos.length) scene.add(m.mesh(mat));
+      if (m.pos.length) scene.add(m.mesh(this.fade?.material(mat) ?? mat));
     }
   }
 
@@ -150,7 +153,8 @@ export class RailwayView {
         const g = r.axis === 'h' ? { x: cx, y: r.pos + Math.sign(cy - r.pos) * PLATFORM_HALF } : { x: r.pos + Math.sign(cx - r.pos) * PLATFORM_HALF, y: cy };
         concrete.box(Math.min(cx, g.x) - 1, z0 + 0.8, Math.min(cy, g.y) - 1, Math.max(cx, g.x) + 1, z0 + 0.95, Math.max(cy, g.y) + 1);
         // The station's name over the door.
-        const sign = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.75), new THREE.MeshBasicMaterial({ map: signTexture(s.name), side: THREE.DoubleSide }));
+        const signMat = new THREE.MeshBasicMaterial({ map: signTexture(s.name), side: THREE.DoubleSide });
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.75), this.fade?.material(signMat) ?? signMat);
         sign.rotation.x = -Math.PI / 2;
         if (r.axis === 'v') sign.rotation.z = Math.PI / 2;
         sign.position.set(cx, z0 + 2.3, cy);
