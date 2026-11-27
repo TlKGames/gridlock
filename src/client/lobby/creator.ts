@@ -1,7 +1,8 @@
-// Character creator: big preview, name with a dice roll, look swatches, Random / Undo / Redo
-// (Ctrl+Z / Ctrl+Y outside the name field). Edits are recorded as {name, look} snapshots.
+// Character creator: big preview, name with a dice roll, look swatches, randomization and preview rotation
+// Ctrl+Z / Ctrl+Y still undo or redo edits outside the name field.
 import { CHARACTER_LOOKS, type CharLook, LOOK_PARTS, type LookPart, NAME_PARTS, PLAYER_VOICES, youLineId } from '../../shared/packs';
 import { clipOf } from '../audio/voiceClips';
+import { CreatorPreview } from './creatorPreview';
 import { figureCanvas } from './figure';
 
 export interface Draft { name: string; look: CharLook; voice: string }
@@ -41,18 +42,21 @@ export class Creator {
   private draft: Draft = { name: rollName(), look: randomLook(false), voice: PLAYER_VOICES[Math.floor(Math.random() * PLAYER_VOICES.length)].id };
   /** The name came from a roll (Random may re-roll it); typing makes it the player's own. */
   private rolledName = true;
+  private preview?: CreatorPreview;
   private undo: Draft[] = [];
   private redo: Draft[] = [];
   error = '';
   private keys = (e: KeyboardEvent) => this.onKey(e);
 
   constructor(private root: HTMLElement, private canCancel: boolean, private create: (d: Draft) => void, private cancel: () => void) {
+    try { this.preview = new CreatorPreview(); } catch { /* Keep the flat portrait when WebGL is unavailable. */ }
     window.addEventListener('keydown', this.keys);
     this.render();
   }
 
   dispose(): void {
     window.removeEventListener('keydown', this.keys);
+    this.preview?.dispose();
   }
 
   private apply(next: Draft, rolled = this.rolledName): void {
@@ -105,18 +109,19 @@ export class Creator {
 
   private stage(): HTMLElement {
     const s = el('div', 'creator-stage');
-    s.appendChild(figureCanvas(this.draft.look, 96, 192));
+    s.appendChild(this.preview?.show(this.draft.look) ?? figureCanvas(this.draft.look, 96, 192));
     const tools = el('div', 'creator-tools');
     const tool = (label: string, title: string, enabled: boolean, act: () => void, cls = '') => {
       const b = el('button', cls, label);
       b.title = title;
+      b.setAttribute('aria-label', title);
       b.disabled = !enabled;
       b.addEventListener('click', act);
       tools.appendChild(b);
     };
     tool('Random', 'Random look and name', true, () => this.apply({ ...this.draft, name: this.rolledName ? rollName() : this.draft.name, look: randomLook() }), 'grow');
-    tool('↶', 'Undo (Ctrl+Z)', this.undo.length > 0, () => this.step(this.undo, this.redo));
-    tool('↷', 'Redo (Ctrl+Y)', this.redo.length > 0, () => this.step(this.redo, this.undo));
+    tool('↶', 'Rotate left', !!this.preview, () => this.preview?.rotate(-1));
+    tool('↷', 'Rotate right', !!this.preview, () => this.preview?.rotate(1));
     s.appendChild(tools);
     return s;
   }
