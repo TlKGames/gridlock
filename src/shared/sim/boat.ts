@@ -3,6 +3,7 @@
 // and sideways drag (`grip`, low) slowly bleeds off the drift, so the stern swings out and the boat
 // slides through its turns. The rudder needs water flowing past it (or the prop's wash at a crawl).
 // Water drag stops a coasting boat in a glide. Land is a wall: a boat that runs aground bounces off.
+import { rebound } from './impact';
 import { approach, clamp } from '../math';
 import type { VehicleSpec } from '../packs';
 import type { StaticWorld } from '../world/collision';
@@ -22,6 +23,7 @@ export function stepBoat(b: Body, spec: VehicleSpec, c: Controls, dt: number, wo
   const flow = clamp(Math.abs(vf0) / 5 + Math.abs(throttle) * 0.35, 0, 1);
   const targetAv = steer * spec.turnRate * flow * (vf0 < -0.3 ? -1 : 1);
   b.av += (targetAv - b.av) * Math.min(1, YAW_RESPONSE * dt);
+  const oldAngle = b.angle;
   b.angle += b.av * dt;
   // The velocity stays where it was in the world; split it along the new heading.
   fx = Math.cos(b.angle); fy = Math.sin(b.angle);
@@ -39,16 +41,31 @@ export function stepBoat(b: Body, spec: VehicleSpec, c: Controls, dt: number, wo
   const ox = b.x, oy = b.y;
   b.x += b.vx * dt;
   b.y += b.vy * dt;
-  // Aground: back where it was, bounced off the bank.
   if (!afloat(b, spec, world)) {
-    const hit = Math.hypot(b.vx, b.vy);
+    const x = b.x, y = b.y;
     b.x = ox; b.y = oy;
-    b.vx *= -0.25; b.vy *= -0.25;
-    b.av *= 0.3;
-    // Already up the bank where it was (shoved there by another boat, or turned onto it): it slides
-    // back off into the water.
-    if (!afloat(b, spec, world)) refloat(b, spec, world);
-    return hit * 0.6;
+    if (!afloat(b, spec, world)) {
+      b.angle = oldAngle; b.av = 0;
+      if (!afloat(b, spec, world)) { refloat(b, spec, world); return 0; }
+    }
+    // Banks, dock faces and the map boundary follow the world axes. Keep any
+    // translation along the face; only the blocked component drives damage.
+    b.x = x;
+    const clearX = afloat(b, spec, world);
+    b.x = ox; b.y = y;
+    const clearY = afloat(b, spec, world);
+    if (clearX && clearY) {
+      // The combined move clipped a convex corner, or rotation alone was blocked.
+      b.x = x;
+      if (afloat(b, spec, world)) return 0;
+    }
+    const slideX = clearX && (!clearY || Math.abs(b.vx) >= Math.abs(b.vy));
+    b.x = slideX ? x : ox; b.y = !slideX && clearY ? y : oy;
+    if (slideX) return rebound(b, 0, -Math.sign(b.vy), spec.length, true);
+    if (clearY) return rebound(b, -Math.sign(b.vx), 0, spec.length, true);
+    // Two faces at an inside corner.
+    const hitX = rebound(b, -Math.sign(b.vx), 0, spec.length, true);
+    return Math.hypot(hitX, rebound(b, 0, -Math.sign(b.vy), spec.length, true));
   }
   return 0;
 }

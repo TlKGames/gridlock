@@ -122,7 +122,12 @@ export function damageVehicle(w: World, v: Vehicle, amount: number, attackerId: 
 export function wallCrash(w: World, v: Vehicle, impact: number, vx: number, vy: number): void {
   if (impact <= RULES.wallSafe) return;
   const sp = Math.hypot(vx, vy) || 1;
-  damageVehicle(w, v, (impact - RULES.wallSafe) * RULES.wallDamage, 0, { x: v.body.x + (vx / sp) * 50, y: v.body.y + (vy / sp) * 50 });
+  const excess = impact - RULES.wallSafe;
+  // A fast, square hit crushes more than a scrape. Keep light contacts near
+  // the pack's base damage and cap the bonus at 50% for severe impacts.
+  const progressive = v.spec.movement === 'wheels' || v.spec.movement === 'bike' || v.spec.movement === 'boat';
+  const damage = excess * RULES.wallDamage * (progressive ? 1 + Math.min(0.5, excess / 40) : 1);
+  damageVehicle(w, v, damage, 0, { x: v.body.x + (vx / sp) * 50, y: v.body.y + (vy / sp) * 50 });
   if (impact > 12) w.emit(FX.Spark, Math.round(v.body.x + (vx / sp) * v.spec.length / 2), Math.round(v.body.y + (vy / sp) * v.spec.length / 2));
 }
 

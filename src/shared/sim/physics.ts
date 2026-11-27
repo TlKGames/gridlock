@@ -3,6 +3,7 @@ import { approach, clamp, wrapAngle } from '../math';
 import { RULES, type VehicleSpec } from '../packs';
 import type { StaticWorld } from '../world/collision';
 import { slopeFactor } from '../world/terrain';
+import { rebound } from './impact';
 import { stepBoat } from './boat';
 import { stepMount } from './mount';
 
@@ -320,6 +321,8 @@ export function collideStatic(b: Body, spec: VehicleSpec, world: StaticWorld, z:
   const hl = spec.length / 2, hw = spec.width / 2;
   const hit = world.resolveObb(b, hl, hw, z);
   if (!hit) return 0;
+  if (spec.movement === 'wheels' || spec.movement === 'bike')
+    return rebound(b, hit.nx, hit.ny, spec.length, false);
   const vn = b.vx * hit.nx + b.vy * hit.ny;
   if (vn >= 0) return 0;
   const e = 0.22;

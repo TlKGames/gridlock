@@ -1,6 +1,7 @@
 // Dynamic contacts: vehicle-vehicle, vehicle-ped and ped-ped.
 import { clamp } from '../../../shared/math';
 import { RULES } from '../../../shared/packs';
+import { contactImpulse, impactYaw } from '../../../shared/sim/impact';
 import { flies, floats } from '../../../shared/sim/kinds';
 import { materialOf } from '../../../shared/materials';
 import { FX } from '../../../shared/protocol';
@@ -74,13 +75,21 @@ function vehicleHit(w: World, a: Vehicle, b: Vehicle, h: Hit): void {
   b.body.x -= h.nx * h.depth * kb; b.body.y -= h.ny * h.depth * kb;
   const vn = (a.body.vx - b.body.vx) * h.nx + (a.body.vy - b.body.vy) * h.ny;
   if (vn >= 0) return;
-  const e = 0.25;
-  const j = (-(1 + e) * vn) / (1 / ma + 1 / mb);
-  a.body.vx += (j / ma) * h.nx; a.body.vy += (j / ma) * h.ny;
-  b.body.vx -= (j / mb) * h.nx; b.body.vy -= (j / mb) * h.ny;
   const impact = -vn;
-  a.body.av += (w.rng.next() - 0.5) * impact * 0.04 * ka;
-  b.body.av += (w.rng.next() - 0.5) * impact * 0.04 * kb;
+  if (afloat(a) || (a.spec.movement === 'wheels' && b.spec.movement === 'wheels')) {
+    const impulse = contactImpulse(a.body.vx - b.body.vx, a.body.vy - b.body.vy, h.nx, h.ny, afloat(a));
+    a.body.vx += ka * impulse.x; a.body.vy += ka * impulse.y;
+    b.body.vx -= kb * impulse.x; b.body.vy -= kb * impulse.y;
+    a.body.av += ka * impactYaw(a.body.angle, h.nx, h.ny, impact, a.spec.length);
+    b.body.av += kb * impactYaw(b.body.angle, -h.nx, -h.ny, impact, b.spec.length);
+  } else {
+    const e = 0.25;
+    const j = (-(1 + e) * vn) / (1 / ma + 1 / mb);
+    a.body.vx += (j / ma) * h.nx; a.body.vy += (j / ma) * h.ny;
+    b.body.vx -= (j / mb) * h.nx; b.body.vy -= (j / mb) * h.ny;
+    a.body.av += (w.rng.next() - 0.5) * impact * 0.04 * ka;
+    b.body.av += (w.rng.next() - 0.5) * impact * 0.04 * kb;
+  }
   if (impact > RULES.crashSafe) {
     const base = (impact - RULES.crashSafe) * RULES.crashDamage;
     const da = a.seats[0], db = b.seats[0];

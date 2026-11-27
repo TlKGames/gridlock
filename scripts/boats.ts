@@ -7,9 +7,10 @@ process.env.GRIDLOCK_DATA = 'data-smoke/boats';
 const { Room } = await import('../src/server/room');
 const { RULES, VEHICLES, vehicleIndex } = await import('../src/shared/packs');
 const { BTN, Mode } = await import('../src/shared/protocol');
-const { seatPed, spawnVehicle } = await import('../src/server/game/factory');
+const { seatPed, spawnVehicle, removeVehicle } = await import('../src/server/game/factory');
 const { mooredBoats } = await import('../src/server/game/systems/moorings');
 const { DOCK_DEPTH, moorings } = await import('../src/shared/world/moorings');
+const { wallCrash } = await import('../src/server/game/combat/damage');
 const { Breakables } = await import('../src/shared/world/breakables');
 const { stepVehicle, newBody, emptyControls } = await import('../src/shared/sim/physics');
 const { afloat } = await import('../src/shared/sim/boat');
@@ -55,6 +56,32 @@ function crossesShore(site: ReturnType<typeof moorings>[number], along: number):
 const sites = moorings(w.city);
 check(sites.every(site => crossesShore(site, 0)), 'a car can drive onto and off every dock');
 check(sites.every(site => !crossesShore(site, 8) && !crossesShore(site, -8)), 'rails stop a full-speed sedan on both sides of every dock');
+
+// Approach the same straight seafront from either side at a fixed speed.
+const northDock = sites.find(site => site.ny === -1 && site.y === w.map.shore.lo)!;
+function strike(type: number, degrees: number) {
+  const spec = VEHICLES[type], boat = spec.movement === 'boat', side = boat ? 1 : -1;
+  const angle = degrees * Math.PI / 180;
+  const extent = (spec.length * Math.sin(angle) + spec.width * Math.cos(angle)) / 2;
+  const edge = boat ? northDock.y : northDock.y + 0.28;
+  const body = newBody(northDock.x + 25, edge - side * (extent + 0.01), side * angle);
+  const speed = Math.min(20, spec.maxSpeed), vx = speed * Math.cos(angle), vy = side * speed * Math.sin(angle);
+  body.vx = vx; body.vy = vy;
+  const hit = stepVehicle(body, spec, emptyControls(), 1 / 30, w.statics, true);
+  const vehicle = spawnVehicle(w, type, body.x, body.y, body.angle);
+  wallCrash(w, vehicle, hit, vx, vy);
+  removeVehicle(w, vehicle);
+  return { damage: spec.hp - vehicle.hp, slide: body.vx / vx, rebounds: side * body.vy < 0 };
+}
+const carSlide = strike(vehicleIndex('sedan'), 45).slide;
+for (const id of ['sedan', 'speedboat', 'skiff', 'cruiser']) {
+  const [graze, oblique, square] = [10, 45, 90].map(angle => strike(vehicleIndex(id), angle));
+  check(graze.damage === 0 && oblique.damage > graze.damage && square.damage > oblique.damage,
+    id + ' damage increases from grazing to oblique to square impacts');
+  check(graze.rebounds && oblique.rebounds && square.rebounds && oblique.slide > 0,
+    id + ' rebounds outward and keeps moving along the waterfront');
+  if (id !== 'sedan') check(oblique.slide > carSlide, id + ' slides more freely than the sedan');
+}
 
 // Walk up to one on the river and the boat is there when you arrive.
 const river = w.map.river!; // Bayhaven has its river
