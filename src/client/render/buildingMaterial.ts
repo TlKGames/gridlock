@@ -13,10 +13,11 @@ export function buildingMaterial(): { mat: THREE.MeshLambertMaterial; uniforms: 
   if (!WORLD.modern) mat.defines = { OLD_ERA: '' };
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uNight = uniforms.uNight;
+    // Interpolating the per-building seed can change the window hash within a single pane.
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', `#include <common>
         attribute vec3 aWall; attribute vec3 aRoof; attribute vec3 aWin;
-        varying vec3 vWall; varying vec3 vRoof; varying vec3 vWin; varying vec3 vGW; varying vec3 vGN;`)
+        varying vec3 vWall; varying vec3 vRoof; flat varying vec3 vWin; varying vec3 vGW; varying vec3 vGN;`)
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         vWall = aWall; vRoof = aRoof; vWin = aWin;
         vec4 gw = modelMatrix * instanceMatrix * vec4(position, 1.0);
@@ -25,7 +26,7 @@ export function buildingMaterial(): { mat: THREE.MeshLambertMaterial; uniforms: 
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
         uniform float uNight;
-        varying vec3 vWall; varying vec3 vRoof; varying vec3 vWin; varying vec3 vGW; varying vec3 vGN;
+        varying vec3 vWall; varying vec3 vRoof; flat varying vec3 vWin; varying vec3 vGW; varying vec3 vGN;
         float h21(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float vnoise(vec2 p) {
           vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
