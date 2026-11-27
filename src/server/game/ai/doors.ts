@@ -1,7 +1,7 @@
 // Getting in and out of walk-in places on foot (shared/world/interiors.ts): someone inside a shop
 // can only be reached through its door gap, so AI heading in or out goes to the doorway first,
 // straight through it, then on. Drivers chasing someone indoors drive to the door and get out there.
-import { DIR_VEC, Dir } from '../../../shared/world/cityTypes';
+import { DIR_VEC, Dir, type Segment } from '../../../shared/world/cityTypes';
 import type { Interior } from '../../../shared/world/interiors';
 import { groundOf, isWayStrip, LEVEL_BAND } from '../../../shared/world/levels';
 import type { Ped } from '../entities';
@@ -72,11 +72,19 @@ export function reachDist(ax: number, ay: number, bx: number, by: number): { d: 
   return { d: Math.hypot(a.x - b.x, a.y - b.y) + Math.abs(lvl(a.f) - lvl(b.f)) * 6, sameFloor: a.f === b.f };
 }
 
+interface StreetGoal { x: number; y: number; indoors: boolean; frontage?: Segment }
+const approaches = new WeakMap<Interior, StreetGoal>();
+
 /** Where a driver should go to reach someone at (x, y): the street outside the door if they're
  *  indoors (on any floor), else the point itself. */
-export function streetGoal(w: World, x: number, y: number): { x: number; y: number; indoors: boolean } {
+export function streetGoal(w: World, x: number, y: number): StreetGoal {
   const i = buildingAt(w, x, y);
   if (!i) return { x, y, indoors: false };
+  const cached = approaches.get(i);
+  if (cached) return cached;
   const d = doorOf(w, i);
-  return { x: d.x + d.fx * 4, y: d.y + d.fy * 4, indoors: true };
+  const gx = d.x + d.fx * 4, gy = d.y + d.fy * 4;
+  const goal = { x: gx, y: gy, indoors: true, frontage: w.map.nearestSegment(gx, gy).seg };
+  approaches.set(i, goal);
+  return goal;
 }

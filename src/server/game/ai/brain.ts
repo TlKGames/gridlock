@@ -129,7 +129,7 @@ function pursue(w: World, p: Ped, v: Vehicle, dt: number): void {
   }
   // Someone indoors (a shop, an upper floor): drive to the street outside the door and go in on foot.
   const goal = tv ? { x: pos.x, y: pos.y, indoors: false } : streetGoal(w, pos.x, pos.y);
-  const d = driveTo(w, v, p, goal.x, goal.y, dt, { stopAt: goal.indoors ? 2 : lethal ? 4 : 8, ram: lethal && !!tv });
+  const d = driveTo(w, v, p, goal.x, goal.y, dt, { stopAt: goal.indoors ? 2 : lethal ? 4 : 8, frontage: goal.frontage, ram: lethal && !!tv });
   if (v.spec.weapons?.length) { gunner(w, p, v, pos, lethal); if (d > 12) return; }
   const tSlow = tv ? Math.hypot(tv.body.vx, tv.body.vy) < 2 : true;
   const mySlow = Math.abs(forwardSpeed(v.body)) < 3;

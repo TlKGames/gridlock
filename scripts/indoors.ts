@@ -70,10 +70,10 @@ const car = spawnVehicle(w, vehicleIndex('police'), node.x, node.y, 0);
 const driver = spawnPed(w, pedIndex('cop'), node.x, node.y, 0);
 seatPed(w, driver, car, 0);
 setTask(driver, 'pursue', me.id);
-t = chase(60, () => [...w.peds.values()].some((p) => p.spec.id === 'cop' && !p.vehicle && roomAt(w, p.body.x, p.body.y) === shop));
-check(t >= 0, `a patrol car pulls up at the door and its crew goes in (${t.toFixed(1)} s)`);
+t = chase(60, () => !driver.vehicle && roomAt(w, driver.body.x, driver.body.y) === shop);
+check(t >= 0, `the assigned patrol driver enters the shop (${t.toFixed(1)} s)`);
 const parked = Math.hypot(car.body.x - outside.x, car.body.y - outside.y);
-check(parked < 15, `the car stopped outside the door (${parked.toFixed(1)} m away), not against the wall behind you`);
+check(parked < 15 && Math.hypot(car.body.vx, car.body.vy) < 1, `the car stopped outside the door (${parked.toFixed(1)} m away), not against the wall behind you`);
 
 // 4. Up a tower: the suspect is on floor 2, the cop in the street.
 clearCops();

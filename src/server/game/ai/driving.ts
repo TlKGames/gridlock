@@ -2,7 +2,7 @@
 import { angleDiff, clamp } from '../../../shared/math';
 import { flies } from '../../../shared/sim/kinds';
 import { forwardSpeed } from '../../../shared/sim/physics';
-import type { RoadNode } from '../../../shared/world/cityTypes';
+import type { RoadNode, Segment } from '../../../shared/world/cityTypes';
 import { groundOf } from '../../../shared/world/levels';
 import { lightState } from '../../../shared/world/traffic';
 import type { DriveState, Ped, Vehicle } from '../entities';
@@ -303,15 +303,17 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
   steerTo(v, tx, ty, target);
 }
 
+interface DriveGoal { stopAt: number; ram: boolean; speed?: number; frontage?: Segment }
+
 /** Routed driving toward a point, switching to a straight line when close. */
-export function driveTo(w: World, v: Vehicle, p: Ped, tx: number, ty: number, dt: number, opts: { stopAt: number; ram: boolean; speed?: number }): number {
+export function driveTo(w: World, v: Vehicle, p: Ped, tx: number, ty: number, dt: number, opts: DriveGoal): number {
   const ai = p.ai!;
   if (!ai.drive) ai.drive = newDrive(w, v);
   return routeTo(w, v, ai.drive, tx, ty, dt, opts);
 }
 
 /** driveTo for whatever holds the route state (an AI driver, or a riderless horse called home). */
-export function routeTo(w: World, v: Vehicle, d: DriveState, tx: number, ty: number, dt: number, opts: { stopAt: number; ram: boolean; speed?: number }): number {
+export function routeTo(w: World, v: Vehicle, d: DriveState, tx: number, ty: number, dt: number, opts: DriveGoal): number {
   const b = v.body;
   // Positions compared over the ground (world/levels.ts).
   const P = groundOf(b.x, b.y), T = groundOf(tx, ty);
@@ -319,7 +321,13 @@ export function routeTo(w: World, v: Vehicle, d: DriveState, tx: number, ty: num
   if (flies(v.spec)) return flyTo(w, v, T.x, T.y, opts.stopAt, dt);
   const fast = opts.speed ?? Math.min(v.spec.maxSpeed * 0.92, 30);
   const clear = clearance(w, v, true);
-  if (dist < 45 && P.f === T.f && !w.statics.raycast(b.x, b.y, tx, ty, 1)) {
+  // A shop can be halfway down a long block. Once on its street (including
+  // either end junction), the entrance is the destination, even beyond 45 m.
+  const street = opts.frontage;
+  const half = street ? street.width / 2 : 0;
+  const onFrontage = street && P.x >= street.x0 - half && P.x <= street.x1 + half
+    && P.y >= street.y0 - half && P.y <= street.y1 + half;
+  if ((dist < 45 || onFrontage) && P.f === T.f && !w.statics.raycast(b.x, b.y, tx, ty, 1)) {
     let target = dist <= opts.stopAt ? 0 : opts.ram ? fast : Math.min(fast, Math.sqrt(2 * 8 * Math.max(0, dist - opts.stopAt)));
     if (!opts.ram) target = Math.min(target, clear.cap + 2);
     if (unstick(v, d, Math.max(target, 3), dt)) return dist;
