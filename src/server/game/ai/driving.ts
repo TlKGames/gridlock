@@ -7,7 +7,7 @@ import { groundOf } from '../../../shared/world/levels';
 import { lightState } from '../../../shared/world/traffic';
 import type { DriveState, Ped, Vehicle } from '../entities';
 import type { World } from '../world';
-import { mayEnter, nextJunction } from './junctions';
+import { mayEnter, nextJunction, occupiesRoad } from './junctions';
 import { findRoute, laneOf, segBetween } from './route';
 
 export function newDrive(w: World, v: Vehicle): DriveState {
@@ -30,7 +30,7 @@ function sirens(w: World): Vehicle[] {
   let c = sirenCache.get(w);
   if (!c || c.t !== w.time) {
     c = { t: w.time, list: [] };
-    for (const o of w.vehicles.values()) if (o.siren && !o.wrecked && !(flies(o.spec) && o.body.alt > 2)) c.list.push(o);
+    for (const o of w.vehicles.values()) if (o.siren && !o.wrecked && occupiesRoad(o)) c.list.push(o);
     sirenCache.set(w, c);
   }
   return c.list;
@@ -100,7 +100,7 @@ function clearance(w: World, v: Vehicle, aggressive: boolean, keepGap = false): 
   let cap = Infinity, ped = false, still = false, stalled = false;
   const look = 14 + Math.abs(forwardSpeed(b)) * 1.1;
   w.vehiclesNear(b.x + c * look / 2, b.y + s * look / 2, look / 2 + 10, (o) => {
-    if (o === v || (flies(o.spec) && o.body.alt > 2)) return;
+    if (o === v || !occupiesRoad(o)) return;
     const rx = o.body.x - b.x, ry = o.body.y - b.y;
     const f = rx * c + ry * s, l = -rx * s + ry * c;
     if (f <= 0 || f > look + o.spec.length || Math.abs(l) > hw + o.spec.width / 2 + 0.6) return;
@@ -136,7 +136,7 @@ function laneClear(w: World, v: Vehicle): boolean {
   const lx = b.x + s * 3.8 + c * 10, ly = b.y - c * 3.8 + s * 10;
   let ok = true;
   w.vehiclesNear(lx, ly, 26, (o) => {
-    if (!ok || o === v) return;
+    if (!ok || o === v || !occupiesRoad(o)) return;
     const rx = o.body.x - b.x, ry = o.body.y - b.y;
     const f = rx * c + ry * s, l = -rx * s + ry * c;
     if (l < -6 || l > -1.5 || f < -6 || f > 32) return; // only the left lane, beside and ahead

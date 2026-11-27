@@ -5,15 +5,19 @@
 export {};
 process.env.GRIDLOCK_DATA = 'data-smoke/boats';
 const { Room } = await import('../src/server/room');
-const { RULES, VEHICLES, vehicleIndex } = await import('../src/shared/packs');
+const { RULES, VEHICLES, pedIndex, vehicleIndex } = await import('../src/shared/packs');
 const { BTN, Mode } = await import('../src/shared/protocol');
-const { seatPed, spawnVehicle, removeVehicle } = await import('../src/server/game/factory');
+const { seatPed, spawnPed, spawnVehicle, removeVehicle } = await import('../src/server/game/factory');
 const { mooredBoats } = await import('../src/server/game/systems/moorings');
 const { DOCK_DEPTH, moorings } = await import('../src/shared/world/moorings');
 const { wallCrash } = await import('../src/server/game/combat/damage');
 const { Breakables } = await import('../src/shared/world/breakables');
 const { stepVehicle, newBody, emptyControls } = await import('../src/shared/sim/physics');
 const { afloat } = await import('../src/shared/sim/boat');
+
+const { World } = await import('../src/server/game/world');
+const { cruise } = await import('../src/server/game/ai/driving');
+const { floats } = await import('../src/shared/sim/kinds');
 
 let failures = 0;
 const check = (ok: boolean, what: string) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) failures++; };
@@ -152,6 +156,25 @@ seatPed(w, p, boat, 0);
 boat.body.x = m.x; boat.body.y = m.y; boat.body.angle = m.angle; boat.body.vx = 0; boat.body.vy = 0;
 drive(1, 0, 0, BTN.enter);
 check(!p.vehicle && !w.map.isWater(p.body.x, p.body.y), 'pulled up at the bank: out onto dry ground');
+
+// Same driver and bridge lane, with each hull below it or a stopped sedan on the deck.
+const traffic = new World(RULES.citySeed);
+const bridge = traffic.city.bridges[0];
+const horizontal = bridge.x1 - bridge.x0 > bridge.y1 - bridge.y0;
+const heading = horizontal ? 0 : Math.PI / 2;
+const x = (bridge.x0 + bridge.x1) / 2 - (horizontal ? 0 : 1.8);
+const y = (bridge.y0 + bridge.y1) / 2 + (horizontal ? 1.8 : 0);
+const commuter = spawnVehicle(traffic, vehicleIndex('sedan'), x, y, heading);
+const driver = spawnPed(traffic, pedIndex('civilian'), x, y);
+seatPed(traffic, driver, commuter, 0);
+for (const spec of [...VEHICLES.filter(floats), sedan]) {
+  const obstacle = spawnVehicle(traffic, vehicleIndex(spec.id), x + 6 * Math.cos(heading), y + 6 * Math.sin(heading), heading + Math.PI / 2);
+  traffic.rebuildHashes();
+  cruise(traffic, commuter, driver, 1 / 30);
+  if (floats(spec)) check(!commuter.ctl.handbrake && commuter.ctl.throttle > 0, `traffic continues over a ${spec.name} below the bridge`);
+  else check(commuter.ctl.handbrake && commuter.ctl.throttle === 0, 'traffic brakes for a stopped sedan on the bridge');
+  removeVehicle(traffic, obstacle);
+}
 
 console.log(failures ? `${failures} check(s) failed` : 'all boat checks passed');
 process.exit(failures ? 1 : 0);

@@ -1,9 +1,12 @@
 // Junction right-of-way for AI traffic: don't enter a box that crossing traffic is using, yield to
 // whoever reaches an unsignalled junction first, and don't enter unless there's room on the far side.
-import { flies } from '../../../shared/sim/kinds';
+import { flies, floats } from '../../../shared/sim/kinds';
 import type { RoadNode } from '../../../shared/world/cityTypes';
 import type { DriveState, Vehicle } from '../entities';
 import type { World } from '../world';
+
+/** Vehicles that can occupy road space, including a grounded helicopter. */
+export const occupiesRoad = (v: Vehicle): boolean => !floats(v.spec) && !(flies(v.spec) && v.body.alt > 2);
 
 const axisOf = (angle: number): 'h' | 'v' => (Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle)) ? 'h' : 'v');
 const inBox = (n: RoadNode, x: number, y: number, pad = 0) => Math.abs(x - n.x) < n.wv / 2 + pad && Math.abs(y - n.y) < n.wh / 2 + pad;
@@ -26,7 +29,7 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
   const r = Math.max(node.wv, node.wh) / 2 + 22;
   let ok = true;
   w.vehiclesNear(node.x, node.y, r, (o) => {
-    if (!ok || o === v || o.wrecked || (flies(o.spec) && o.body.alt > 2)) return;
+    if (!ok || o === v || o.wrecked || !occupiesRoad(o)) return;
     const crossing = axisOf(o.body.angle) !== axis;
     const moving = Math.hypot(o.body.vx, o.body.vy) > 0.5;
     // Crossing traffic inside the box (moving or stuck there): wait for it to clear.
@@ -40,7 +43,7 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
   if (!ok || !exit) return ok;
   // Keep the box clear: only go if the lane we're heading into isn't backed up to the junction.
   w.vehiclesNear(exit.x, exit.y, 7, (o) => {
-    if (o !== v && Math.hypot(o.body.vx, o.body.vy) < 1) ok = false;
+    if (o !== v && occupiesRoad(o) && Math.hypot(o.body.vx, o.body.vy) < 1) ok = false;
   });
   return ok;
 }
