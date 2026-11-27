@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { type CharLook, VEHICLES, WEAPONS } from '../../shared/packs';
 import { EK, PF, PK, VF } from '../../shared/protocol';
-import { astride, onRails } from '../../shared/sim/kinds';
+import { astride, flies, onRails } from '../../shared/sim/kinds';
 import { animateLegs } from './legs';
 import { materialOf } from '../../shared/materials';
 import type { EntityStore, ViewEntity } from '../net/entities';
@@ -15,6 +15,7 @@ import { animatePed, HIP_H, makePed, muzzleOf, PED_S, type PedView, ridePed, set
 import { lampMaterial, makeVehicle, showDamage, sirenMats, type VehicleView } from './vehicleMesh';
 import { decodeDamage } from './vehicleDamage';
 import { Skids } from './skids';
+import type { BridgeFade } from './water';
 import type { RailFade } from './railFade';
 import { floatBoat } from './boats';
 
@@ -36,6 +37,11 @@ const crateDark = new THREE.MeshLambertMaterial({ color: '#1a1a1c' });
 const crateRed = new THREE.MeshBasicMaterial({ color: '#e0201c' });
 const cashMat = new THREE.MeshLambertMaterial({ color: '#3fae4a', emissive: '#0f3a12' });
 const gunMat = new THREE.MeshLambertMaterial({ color: '#4a4e54', emissive: '#202428' });
+
+// Water first, then opaque hulls and their riders, then the bridge's depth pass.
+function setVesselOrder(root: THREE.Object3D, order: number): void {
+  root.traverse(part => { if (part instanceof THREE.Mesh) part.renderOrder = order; });
+}
 
 export class WorldView {
   private peds = new Map<number, PedView>();
@@ -94,7 +100,7 @@ export class WorldView {
   /** Tyre marks and smoke; `skids.squeal` is the hardest slide this frame, for the tyre sound. */
   readonly skids = new Skids();
 
-  constructor(private scene: THREE.Scene, private fx: Effects, private lamps: { x: number; y: number; off?: boolean }[], private railFade?: RailFade) {}
+  constructor(private scene: THREE.Scene, private fx: Effects, private lamps: { x: number; y: number; off?: boolean }[], private railFade?: RailFade, private bridgeFade?: BridgeFade) {}
 
   sync(store: EntityStore, dt: number, own: OwnState | null, tags: Map<number, PlayerTag>, night: number, view: { x0: number; y0: number; x1: number; y1: number }): void {
     this.time += dt;
@@ -152,7 +158,11 @@ export class WorldView {
       this.scene.add(v.root);
     }
     if (this.ride(e, v, tags)) return;
-    if (v.root.parent !== this.scene) { this.scene.add(v.root); v.root.scale.setScalar(1); }
+    if (v.root.parent !== this.scene) {
+      this.scene.add(v.root);
+      v.root.scale.setScalar(1);
+      setVesselOrder(v.root, 0);
+    }
     const isMe = own && own.pid === e.id && !own.vid;
     const x = isMe ? own!.x : e.x, y = isMe ? own!.y : e.y, a = isMe ? own!.angle : e.angle;
     // Jump: a 0.5 s arc, started when the server says this ped is hopping.
@@ -182,7 +192,12 @@ export class WorldView {
     const veh = vid ? this.store?.all.get(vid) : undefined;
     const saddle = veh ? VEHICLES[veh.data[2]].saddles?.[seat] : undefined;
     if (!bike || !saddle) return false;
-    if (v.root.parent !== bike.root) bike.root.add(v.root);
+    const newSeat = v.root.parent !== bike.root;
+    if (newSeat) bike.root.add(v.root);
+    if (newSeat || v.weapon !== d[7]) {
+      setPedWeapon(v, d[7]);
+      setVesselOrder(v.root, VEHICLES[veh!.data[2]].movement === 'boat' ? -2 : 0);
+    }
     // Sitting in a car (side by side, front and back) they need to be smaller to fit than astride a bike.
     const k = astride(VEHICLES[veh!.data[2]]) ? RIDER_SCALE : SEAT_SCALE;
     v.root.scale.setScalar(k);
@@ -190,7 +205,6 @@ export class WorldView {
     // The model's left side is local -z (Blender +y), so + y (the driver's right) is + z.
     v.root.position.set(saddle.x - k * HIP_H * Math.sin(saddle.lean), saddle.z - k * HIP_H * Math.cos(saddle.lean), saddle.y ?? 0);
     v.root.visible = bike.root.visible;
-    setPedWeapon(v, d[7]);
     ridePed(v, saddle.lean, !!(d[6] & PF.aim));
     const tag = tags.get(e.id);
     if (tag && !this.tagged.has(e.id)) this.addTag(e.id, v, tag, false);
@@ -235,9 +249,6 @@ export class WorldView {
     if (v) { v.swingT = SWING_TIME; v.swingSide = -(v.swingSide ?? 1); }
   }
 
-  /** Dry ground at a point (set by the game from the city map): a boat there is under a bridge. */
-  dryAt: (x: number, y: number) => boolean = () => false;
-
   private vehicle(e: ViewEntity, dt: number, own: OwnState | null, night: number): void {
     const d = e.data;
     const type = d[2], color = d[6], flags = d[7];
@@ -250,12 +261,14 @@ export class WorldView {
     // a horse lying in its own colours.
     const mat = materialOf(spec);
     const charred = wreck && !!mat.charred;
-    const cutaway = this.railFade && onRails(spec) ? this.railFade : undefined;
+    const boat = spec.movement === 'boat';
+    const cutaway = onRails(spec) ? this.railFade : boat || flies(spec) ? undefined : this.bridgeFade;
     const key = `${type}:${color}:${charred}`;
     let v = this.vehs.get(e.id);
     if (!v || v.key !== key) {
       if (v) this.scene.remove(v.root);
       v = makeVehicle(type, color, charred);
+      if (boat) setVesselOrder(v.root, -2);
       if (cutaway) v.root.traverse((part) => {
         if (part instanceof THREE.Mesh) part.material = cutaway.material(part.material);
       });
@@ -287,10 +300,14 @@ export class WorldView {
       v.root.rotation.z = v.rearing + pitch;
     }
     if (spec.movement === 'boat') {
-      floatBoat(v.root, this.fx, spec, this.time + e.id * 1.7, dt, x, y, a, mine ? own!.vx : e.vx, mine ? own!.vy : e.vy, wreck, this.dryAt(x, y));
+      floatBoat(v.root, this.fx, spec, this.time + e.id * 1.7, dt, x, y, a, mine ? own!.vx : e.vx, mine ? own!.vy : e.vy, wreck);
     }
     v.root.visible = e.id !== this.hiddenVehicle && this.shows(g.f);
     if (mat.dents) showDamage(v, spec, e.id, dents);
+    if (cutaway && v.dents) {
+      v.cab.body.material = cutaway.material(v.dents.body);
+      if (v.cab.shiny) v.cab.shiny.material = cutaway.material(v.dents.shiny);
+    }
     this.carLabel(e.id, v.root, spec.height);
     if (v.turret) v.turret.rotation.y = -(e.turret - e.angle);
     // Trailer swing relative to the cab: your own rig's is predicted with the cab; others' come
@@ -306,6 +323,7 @@ export class WorldView {
     for (const s of v.sirens) {
       const blue = s.userData.blue as boolean;
       s.material = !sirenOn ? (blue ? sirenMats.blueDim : sirenMats.redDim) : (phase === (blue ? 1 : 0) ? (blue ? sirenMats.blue : sirenMats.red) : (blue ? sirenMats.blueDim : sirenMats.redDim));
+      if (cutaway) s.material = cutaway.material(s.material) as typeof s.material;
     }
     const c = Math.cos(a), s = Math.sin(a);
     if (sirenOn) {

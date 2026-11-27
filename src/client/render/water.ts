@@ -1,5 +1,7 @@
 // Sea and river surfaces with a scrolling procedural normal map, plus bridge decks over the river.
 import * as THREE from 'three';
+import { OverheadFade } from './overheadFade';
+import type { Rect } from '../../shared/math';
 import { Rng } from '../../shared/rng';
 import type { CityMap } from '../../shared/world/city';
 import { LAND0, LAND1, LANE_W } from '../../shared/world/cityTypes';
@@ -34,11 +36,34 @@ function normalMap(): THREE.CanvasTexture {
   return t;
 }
 
+function spanEdge(b: Rect, x: number, y: number): number {
+  return Math.max(b.x0 - x, x - b.x1, b.y0 - y, y - b.y1);
+}
+
+export class BridgeFade extends OverheadFade {
+  constructor(private spans: Rect[]) { super(); }
+
+  follow(x: number, y: number, length: number): void {
+    // Begin before the bow enters and hold until the stern clears, in either direction.
+    let strength = 0;
+    if (length) for (const b of this.spans) {
+      strength = 1 - THREE.MathUtils.smoothstep(spanEdge(b, x, y) - length / 2, 0, 3);
+      if (strength > 0) {
+        this.bounds.set(b.x0 - 0.5, b.y0 - 1, b.x1 + 0.5, b.y1 + 1);
+        break;
+      }
+    }
+    this.focus.value.set(x, -4, y, strength);
+  }
+}
+
 export class Water {
+  readonly fade: BridgeFade;
   private tex: THREE.CanvasTexture;
   private t = 0;
 
   constructor(scene: THREE.Scene, map: CityMap) {
+    this.fade = new BridgeFade(map.city.bridges);
     this.tex = normalMap();
     this.tex.repeat.set(1 / 80, 1 / 80);
     const mat = new THREE.MeshStandardMaterial({ color: '#163a47', roughness: 0.32, metalness: 0.1, normalMap: this.tex, normalScale: new THREE.Vector2(0.22, 0.22) });
@@ -52,6 +77,7 @@ export class Water {
     const plane = (x0: number, y0: number, x1: number, y1: number) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, y1 - y0).rotateX(-Math.PI / 2), mat);
       m.position.set((x0 + x1) / 2, 0.03, (y0 + y1) / 2);
+      m.renderOrder = -3;
       m.receiveShadow = true;
       scene.add(m);
     };
@@ -69,9 +95,15 @@ export class Water {
   }
 
   private bridges(scene: THREE.Scene, map: CityMap, r: { y0: number; y1: number }): void {
-    const deck = new Batch(UNIT.box(), lambert());
+    const deck = new Batch(UNIT.box(), this.fade.material(lambert()));
+    // Roads and water are practically level in the simulation. Keep the water and boats'
+    // colour, then restore water-surface depth under each deck before drawing road traffic.
+    const channel = new Batch(UNIT.box(), new THREE.MeshBasicMaterial({
+      colorWrite: false, depthFunc: THREE.AlwaysDepth,
+    }), { cast: false, receive: false });
     for (const b of map.city.bridges) {
       const w = b.x1 - b.x0, len = b.y1 - b.y0 + 2, cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+      channel.add(cx, 0.02, cy, w + 0.8, 0.01, len, '#ffffff');
       if (!WORLD.modern) { timberBridge(deck, cx, cy, w, len, r); continue; }
       deck.add(cx, -1.4, cy, w + 0.6, 1.5, len, '#5d5f62');
       deck.add(cx, 0.08, cy, w - 0.4, 0.02, len, '#3a3d42');
@@ -89,6 +121,7 @@ export class Water {
       // Piers in the river.
       for (let y = r.y0 + 12; y < r.y1 - 6; y += 22) deck.add(cx, -4, y, w * 0.6, 4, 3, '#6d6b66');
     }
+    for (const mesh of channel.build(scene)) mesh.renderOrder = -1;
     deck.build(scene);
   }
 

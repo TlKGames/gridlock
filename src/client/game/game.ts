@@ -124,8 +124,8 @@ export class Game {
     const meshes = new CityMeshes(this.stage.scene, city);
     this.fx = new Effects(this.stage.scene, this.stage.flash);
     this.railway = new RailwayView(this.stage.scene, city, (x, y) => this.map.isWater(x, y));
-    this.view = new WorldView(this.stage.scene, this.fx, meshes.lamps, this.railway.fade);
-    this.view.dryAt = (x, y) => !this.map.isWater(x, y); // a boat on "dry ground" is under a bridge
+    this.water = new Water(this.stage.scene, this.map);
+    this.view = new WorldView(this.stage.scene, this.fx, meshes.lamps, this.railway.fade, this.water.fade);
     this.input = new Input(canvas);
     this.predict = new Predictor(statics, this.map);
     this.furniture = meshes.furniture;
@@ -179,7 +179,6 @@ export class Game {
     if (import.meta.env.PROD) window.onbeforeunload = (e) => { if (this.running) e.preventDefault(); };
     this.buildingUniforms = meshes.uniforms;
     this.props = meshes.props;
-    this.water = new Water(this.stage.scene, this.map);
     this.storefronts = new Storefronts(this.stage.scene, city);
     addAtms(this.stage.scene, atmsOf(city));
     this.gas = new GasStations(this.stage.scene, city);
@@ -396,6 +395,8 @@ export class Game {
     const up = own ? groundOf(own.x, own.y) : null;
     const upH = own ? heightAt(own.x, own.y) : 0;
     const disp = own && up ? { ...own, x: up.x, y: up.y } : null;
+    const riding = own?.vid ? VEHICLES[this.you!.vt] : undefined;
+    this.water.fade.follow(up?.x ?? 0, up?.y ?? 0, riding?.movement === 'boat' ? riding.length : 0);
     this.railway.fade?.update(up?.x ?? 0, up?.y ?? 0, upH + (own?.alt ?? 0), up?.f === 0);
     if (own && disp && up) {
       // GTA2: centred on you on foot; leads along travel in vehicles.
