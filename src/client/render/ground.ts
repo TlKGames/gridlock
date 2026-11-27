@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import type { CityMap } from '../../shared/world/city';
 import { MAP_SIZE } from '../../shared/world/cityTypes';
+import { buildRoadMarkings } from './roadMarkings';
 import { buildBrush } from './brush';
 import { CHUNK, GROUND_PX, PREVIEW_PX, paintChunk } from './groundPaint';
 import { hasWild } from './groundRelief';
@@ -48,6 +49,7 @@ export class Ground {
     this.sea.position.set(0, -0.05 + (low < 0 ? low - 0.5 : 0), 0);
     this.sea.receiveShadow = true;
     scene.add(this.sea);
+    buildRoadMarkings(scene, map);
   }
 
   update(view: { x0: number; y0: number; x1: number; y1: number }): void {

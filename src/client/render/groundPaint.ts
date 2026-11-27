@@ -14,8 +14,6 @@ export const PREVIEW_PX = 4;
 const ASPHALT = '#3b3e43';
 const ASPHALT_ART = '#36393e';
 const WATER = '#1f4250';
-const LINE_W = '#e8e6df';
-const LINE_Y = '#e2b93b';
 
 let noise: HTMLCanvasElement | null = null;
 function noisePattern(): HTMLCanvasElement {
@@ -120,7 +118,6 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
   }
 
   yield;
-  if (WORLD.modern) paintMarkings(ctx, map, inView);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 0.12;
   ctx.globalCompositeOperation = 'overlay';
@@ -183,62 +180,5 @@ function grain(ctx: CanvasRenderingContext2D, map: CityMap, cx: number, cy: numb
     if (z < 0 || ZONES[z].layout !== 'wild') continue;
     ctx.fillStyle = t < 0.45 ? 'rgba(60,45,30,0.22)' : t < 0.8 ? 'rgba(255,240,210,0.16)' : 'rgba(80,90,50,0.25)';
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  }
-}
-
-function paintMarkings(ctx: CanvasRenderingContext2D, map: CityMap, inView: (a: number, b: number, c: number, d: number) => boolean): void {
-  const city = map.city;
-  ctx.lineCap = 'butt';
-  for (const s of city.segs) {
-    if (s.trail) continue; // dirt: no paint
-    const A = city.nodes[s.a], B = city.nodes[s.b];
-    const hw = s.width / 2;
-    if (!inView(Math.min(s.x0, s.x1) - hw, Math.min(s.y0, s.y1) - hw, Math.max(s.x0, s.x1) + hw, Math.max(s.y0, s.y1) + hw)) continue;
-    // Markings stop at the intersections.
-    const a0 = (s.axis === 'h' ? A.wv : A.wh) / 2 + 0.5, b0 = (s.axis === 'h' ? B.wv : B.wh) / 2 + 0.5;
-    const line = (off: number, color: string, width: number, dash: number[]) => {
-      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash);
-      ctx.beginPath();
-      if (s.axis === 'h') { ctx.moveTo(s.x0 + a0, s.y0 + off); ctx.lineTo(s.x1 - b0, s.y0 + off); }
-      else { ctx.moveTo(s.x0 + off, s.y0 + a0); ctx.lineTo(s.x0 + off, s.y1 - b0); }
-      ctx.stroke();
-    };
-    if (s.lanes > 1) {
-      line(-0.2, LINE_Y, 0.15, []);
-      line(0.2, LINE_Y, 0.15, []);
-      line(-LANE_W, LINE_W, 0.15, [3, 6]);
-      line(LANE_W, LINE_W, 0.15, [3, 6]);
-    } else {
-      line(0, LINE_Y, 0.15, [3, 4]);
-      if (s.parking) { line(-LANE_W, 'rgba(232,230,223,0.5)', 0.12, []); line(LANE_W, 'rgba(232,230,223,0.5)', 0.12, []); }
-    }
-    ctx.setLineDash([]);
-    // Stop lines.
-    ctx.fillStyle = LINE_W;
-    const lanesW = s.lanes * LANE_W;
-    const sa = a0 + (A.lights ? 2.6 : 0), sb = b0 + (B.lights ? 2.6 : 0);
-    if (s.axis === 'h') {
-      if (B.segs.length > 2) ctx.fillRect(s.x1 - sb - 0.4, s.y0 + 0.2, 0.4, lanesW);
-      if (A.segs.length > 2) ctx.fillRect(s.x0 + sa, s.y0 - 0.2 - lanesW, 0.4, lanesW);
-    } else {
-      if (B.segs.length > 2) ctx.fillRect(s.x0 - 0.2 - lanesW, s.y1 - sb - 0.4, lanesW, 0.4);
-      if (A.segs.length > 2) ctx.fillRect(s.x0 + 0.2, s.y0 + sa, lanesW, 0.4);
-    }
-  }
-  // Zebra crossings at signalled intersections.
-  ctx.fillStyle = 'rgba(235,233,226,0.85)';
-  for (const n of city.nodes) {
-    if (!n.lights || !inView(n.x - n.wv, n.y - n.wh, n.x + n.wv, n.y + n.wh)) continue;
-    for (const si of n.segs) {
-      const s = city.segs[si];
-      const toward = s.a === n.id ? 1 : -1;
-      if (s.axis === 'h') {
-        const x = n.x + toward * (n.wv / 2 + 0.3) - (toward < 0 ? 2.4 : 0);
-        for (let y = n.y - s.width / 2 + 0.6; y < n.y + s.width / 2 - 0.6; y += 1.2) ctx.fillRect(x, y, 2.4, 0.6);
-      } else {
-        const y = n.y + toward * (n.wh / 2 + 0.3) - (toward < 0 ? 2.4 : 0);
-        for (let x = n.x - s.width / 2 + 0.6; x < n.x + s.width / 2 - 0.6; x += 1.2) ctx.fillRect(x, y, 0.6, 2.4);
-      }
-    }
   }
 }

@@ -1,6 +1,6 @@
 // Lots and blocks on the ground canvas (groundPaint.ts calls these): parks, yards, plazas, parking,
 // pads and service aprons, a town's walks. A modern city (WORLD.modern) gets lawns, driveways,
-// hedges, pools, paving and stall lines; an older era gets packed earth, split-rail fences, garden
+// hedges, pools, paving; an older era gets packed earth, split-rail fences, garden
 // plots, wagon ruts and plank boardwalks.
 import { SERVICES } from '../../shared/packs';
 import { Rng } from '../../shared/rng';
@@ -41,7 +41,7 @@ export function paintLot(ctx: CanvasRenderingContext2D, lot: Lot, ground: string
     case 'yard': if (WORLD.modern) { paintDriveway(ctx, lot); backyard(ctx, lot); } else homestead(ctx, lot, ground); break;
     // An older era's yards and squares are packed earth, not paving.
     case 'plaza': if (WORLD.modern) { fill('#a29d92'); grid(ctx, r, 3, 'rgba(0,0,0,0.08)'); } else fill('#b09a72'); break;
-    case 'parking': if (WORLD.modern) { fill('#45484d'); stallLines(ctx, lot); } else fill('#a8906a'); break;
+    case 'parking': fill(WORLD.modern ? '#45484d' : '#a8906a'); break;
     case 'containers': fill('#6f6c66'); break;
     case 'pad': {
       // A concrete pad; before concrete, a packed-earth yard (a parade ground).
@@ -172,25 +172,6 @@ function homestead(ctx: CanvasRenderingContext2D, lot: Lot, ground: string): voi
     ctx.fillStyle = 'rgba(80,120,50,0.8)';
     for (let x = back.x0 + 0.3; x < back.x0 + w; x += 0.6) { ctx.beginPath(); ctx.arc(x, y + 0.45, 0.16, 0, Math.PI * 2); ctx.fill(); }
   }
-}
-
-function stallLines(ctx: CanvasRenderingContext2D, lot: Lot): void {
-  const r = lot.rect;
-  const alongX = r.x1 - r.x0 >= r.y1 - r.y0;
-  ctx.strokeStyle = 'rgba(240,240,230,0.55)';
-  ctx.lineWidth = 0.15;
-  ctx.beginPath();
-  const len = alongX ? r.x1 - r.x0 : r.y1 - r.y0;
-  for (let a = 1.5; a < len - 1.5; a += 2.9) {
-    if (alongX) {
-      ctx.moveTo(r.x0 + a, r.y0 + 1.5); ctx.lineTo(r.x0 + a, r.y0 + 6.9);
-      ctx.moveTo(r.x0 + a, r.y1 - 1.5); ctx.lineTo(r.x0 + a, r.y1 - 6.9);
-    } else {
-      ctx.moveTo(r.x0 + 1.5, r.y0 + a); ctx.lineTo(r.x0 + 6.9, r.y0 + a);
-      ctx.moveTo(r.x1 - 1.5, r.y0 + a); ctx.lineTo(r.x1 - 6.9, r.y0 + a);
-    }
-  }
-  ctx.stroke();
 }
 
 function helipad(ctx: CanvasRenderingContext2D, r: R): void {
