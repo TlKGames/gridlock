@@ -34,6 +34,8 @@ function fightOrFlight(w: World, p: Ped, attacker: Ped): void {
 function alertAllies(w: World, p: Ped, attacker: Ped, radius: number): void {
   w.pedsNear(p.body.x, p.body.y, radius, (o) => {
     if (o === p || o.dead || !o.ai || o.faction !== p.faction || o === attacker) return;
+    // Clerks and guards share the civilian faction. Only other guard-role NPCs answer their call.
+    if (p.spec.behaviour === 'guard' && o.spec.behaviour !== 'guard') return;
     // An attack on one of them is an attack on all of them: they hold the grudge too.
     o.ai.enemy = attacker.id;
     o.ai.enemyT = w.time;
