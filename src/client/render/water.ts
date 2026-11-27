@@ -115,11 +115,11 @@ export class Water {
       colorWrite: false, depthFunc: THREE.AlwaysDepth,
     }), { cast: false, receive: false });
     for (const b of map.city.bridges) {
-      const w = b.x1 - b.x0, len = b.y1 - b.y0 + 2, cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+      const w = b.x1 - b.x0, len = b.y1 - b.y0, cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
       channel.add(cx, 0.02, cy, w + 0.8, 0.01, len, '#ffffff');
       if (!WORLD.modern) { timberBridge(deck, cx, cy, w, len, r); continue; }
-      deck.add(cx, -1.4, cy, w + 0.6, 1.5, len, '#5d5f62');
-      deck.add(cx, 0.08, cy, w - 0.4, 0.02, len, '#3a3d42');
+      deck.add(cx, -1.4, cy, w + 0.6, 1.44, len, '#5d5f62');
+      deck.add(cx, 0.08, cy, w, 0.02, len, '#3a3d42');
       // Lane markings on the deck.
       deck.add(cx - 0.2, 0.1, cy, 0.15, 0.01, len, '#e2b93b');
       deck.add(cx + 0.2, 0.1, cy, 0.15, 0.01, len, '#e2b93b');

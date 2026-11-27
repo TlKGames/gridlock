@@ -6,6 +6,7 @@ import { DISTRICTS, ZONES, zoneIndex } from '../packs';
 import type { Rng } from '../rng';
 import { LAND0, LAND1, LANE_W, MAP_SIZE, PARK_W, type RoadLine, type RoadNode, type Segment } from './cityTypes';
 import { WORLD } from './worldSpec';
+import { riverChannel } from './waterfront';
 import { insertCorridors } from './corridors';
 
 const MIN_GAP = 46;
@@ -154,6 +155,7 @@ export function genGraph(L: RoadLayout): { nodes: RoadNode[]; segs: Segment[]; b
   const nodes: RoadNode[] = [];
   const segs: Segment[] = [];
   const bridges: Rect[] = [];
+  const channel = riverChannel(ys, riverRow);
 
   const node = (i: number, j: number): RoadNode => {
     const k = j * (nx + 1) + i;
@@ -193,10 +195,10 @@ export function genGraph(L: RoadLayout): { nodes: RoadNode[]; segs: Segment[]; b
     if (xs[i].rail) continue;
     for (let j = 0; j < ny; j++) {
       if (j === riverRow) {
-        if (!L.bridgeLines.has(i)) continue;
+        if (!channel || !L.bridgeLines.has(i)) continue;
         add('v', node(i, j), node(i, j + 1), xs[i], true, wildPair(zoneAt(i - 1, j - 1), zoneAt(i, j - 1)));
-        bridges.push({ x0: xs[i].pos - xs[i].width / 2, x1: xs[i].pos + xs[i].width / 2,
-          y0: ys[j].pos + ys[j].width / 2, y1: ys[j + 1].pos - ys[j + 1].width / 2 });
+        const half = segs[segs.length - 1].width / 2;
+        bridges.push({ x0: xs[i].pos - half, x1: xs[i].pos + half, y0: channel.y0, y1: channel.y1 });
         continue;
       }
       const left = clusterAt(i - 1, j), right = clusterAt(i, j);

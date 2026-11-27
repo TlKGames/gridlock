@@ -43,8 +43,8 @@ export function buildRoadMarkings(scene: THREE.Scene, map: CityMap): void {
         const from = Math.max(at, start + (a.lights ? 3 : 0));
         const stop = Math.min(end - (b.lights ? 3 : 0), at + dash), side = off - width / 2;
         if (s.bridge && map.river) {
-          strip(from, Math.min(stop, map.river.y0 - 1), side, width, color);
-          strip(Math.max(from, map.river.y1 + 1), stop, side, width, color);
+          strip(from, Math.min(stop, map.river.y0), side, width, color);
+          strip(Math.max(from, map.river.y1), stop, side, width, color);
         } else strip(from, stop, side, width, color);
       }
     };
@@ -61,9 +61,12 @@ export function buildRoadMarkings(scene: THREE.Scene, map: CityMap): void {
       }
     }
     const lanes = s.lanes * LANE_W;
-    const near = start + (a.lights ? 2.6 : 0), far = end - (b.lights ? 2.6 : 0);
-    if (a.segs.length > 2) strip(near, near + 0.4, horizontal ? -0.2 - lanes : 0.2, lanes, WHITE);
-    if (b.segs.length > 2) strip(far - 0.4, far, horizontal ? 0.2 : -0.2 - lanes, lanes, WHITE);
+    // At a bridge the stop bar fits between the last zebra stripe and the deck joint.
+    const barWidth = s.bridge ? 0.25 : 0.4;
+    const near = s.bridge && map.river ? map.river.y0 - barWidth : start + (a.lights ? 2.6 : 0);
+    const far = s.bridge && map.river ? map.river.y1 + barWidth : end - (b.lights ? 2.6 : 0);
+    if (a.segs.length > 2) strip(near, near + barWidth, horizontal ? -0.2 - lanes : 0.2, lanes, WHITE);
+    if (b.segs.length > 2) strip(far - barWidth, far, horizontal ? 0.2 : -0.2 - lanes, lanes, WHITE);
     for (const n of [a, b]) {
       if (!n.lights) continue;
       const direction = n === a ? 1 : -1;

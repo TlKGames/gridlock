@@ -1,15 +1,19 @@
 // The dry edge follows the outside of the waterfront road. The river remains open
 // at both mouths. Positions here drive ground paint, swimming and hull clearance.
 import { insetRect, type Rect } from '../math';
-import { type City, SIDEWALK_W, LAND0, LAND1, MAP_SIZE } from './cityTypes';
+import { type City, type RoadLine, SIDEWALK_W, LAND0, LAND1, MAP_SIZE } from './cityTypes';
+
+export function riverChannel(ys: RoadLine[], row: number): Rect | null {
+  if (row < 0) return null;
+  return { x0: 0, x1: MAP_SIZE * 2,
+    y0: ys[row].pos + ys[row].width / 2 + SIDEWALK_W,
+    y1: ys[row + 1].pos - ys[row + 1].width / 2 - SIDEWALK_W };
+}
 
 export function waterfront(city: City) {
   const coast = city.edge === 'sea';
   const lo = coast ? LAND0 - SIDEWALK_W : LAND0, hi = coast ? LAND1 + SIDEWALK_W : LAND1;
-  const r = city.riverRow;
-  const river = r < 0 ? null : { x0: 0, x1: MAP_SIZE * 2,
-    y0: city.ys[r].pos + city.ys[r].width / 2 + SIDEWALK_W,
-    y1: city.ys[r + 1].pos - city.ys[r + 1].width / 2 - SIDEWALK_W };
+  const river = riverChannel(city.ys, city.riverRow);
   const walks: Rect[] = [];
   const strip = (x0: number, y0: number, x1: number, y1: number) => walks.push({ x0, y0, x1, y1 });
   if (river) {

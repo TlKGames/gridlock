@@ -97,11 +97,6 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
     const y0 = Math.min(s.y0, s.y1) - (s.axis === 'h' ? hw : 0), y1 = Math.max(s.y0, s.y1) + (s.axis === 'h' ? hw : 0);
     if (!inView(x0, y0, x1, y1)) continue;
     rect(x0, y0, x1, y1, s.trail || !WORLD.modern ? TRAIL() : s.lanes > 1 ? ASPHALT_ART : ASPHALT);
-    if (s.bridge) {
-      const kerb = WORLD.modern ? '#9a978e' : '#6a4e34';
-      rect(x0 - 1.2, y0, x0, y1, kerb);
-      rect(x1, y0, x1 + 1.2, y1, kerb);
-    }
   }
   for (const n of city.nodes) {
     if (!inView(n.x - n.wv, n.y - n.wh, n.x + n.wv, n.y + n.wh)) continue;
