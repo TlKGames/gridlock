@@ -50,7 +50,7 @@ export function buildSnapshot(w: World, pl: Player): S2C {
   const me = w.peds.get(pl.pid);
   const center = me ? w.pedPos(me) : { x: 1000, y: 1000 };
   // Upstairs (world/levels.ts) you also see the street round your building; on the street or a
-  // highway's deck, everything on the street and the highways round you (they're drawn over it).
+  // train's viaduct, everything on the street and the viaduct round you (it's drawn over it).
   const below = groundOf(center.x, center.y);
   const R = RULES.interestRadius;
   const R2 = R * R;

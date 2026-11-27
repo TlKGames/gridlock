@@ -29,7 +29,9 @@ export const PROPERTIES: PropertySpec[] = [
   { id: 'general_store', name: 'General Store', kind: 'business', zones: ['town'], count: 4, price: 900, income: 12, garage: 0, signText: 'GENERAL STORE',
     signColor: '#3e5a3a', interior: 'shop', robbery: { till: 40, fightBack: 0.3 } },
   { id: 'saloon', name: 'Saloon', kind: 'business', zones: ['town'], count: 4, price: 2500, income: 35, garage: 0, signText: 'SALOON',
-    signColor: '#7a2a20', perk: 'club', interior: 'saloon', robbery: { till: 80, fightBack: 0.6 } },
+    signColor: '#7a2a20', perk: 'club', interior: 'saloon', robbery: { till: 80, fightBack: 0.6 },
+    // On the map: a beer mug; hover for the games it deals.
+    icon: { color: '#d9a23a', glyph: 'mug', label: 'Saloon' } },
   { id: 'hotel', name: 'Hotel', kind: 'business', zones: ['town'], count: 2, price: 4000, income: 55, garage: 0, signText: 'HOTEL',
     signColor: '#b8902e', interior: 'diner', robbery: { till: 60, fightBack: 0.3 } },
   { id: 'barn', name: 'Barn', kind: 'business', zones: ['homesteads'], count: 3, price: 1500, income: 18, garage: 0, signText: 'FEED & GRAIN',

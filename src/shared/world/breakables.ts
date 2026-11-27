@@ -7,7 +7,6 @@ import { Rng } from '../rng';
 import type { Body } from '../sim/physics';
 import { type City, LANE_W, type RoadNode } from './cityTypes';
 import { obbVsCircle } from './collision';
-import { AVENUE_W } from './wayTypes';
 
 /** One piece of street furniture: its kind (STREET_PROPS index), spot, and the way over the road
  *  (a lamp's arm reaches out that way). A traffic light also has its arm's `reach` (m) and
@@ -22,15 +21,13 @@ export function signalPosts(city: City): { x: number; y: number; rx: number; ry:
     if (!n.lights) continue;
     for (const si of n.segs) {
       const s = city.segs[si];
-      if (s.way !== undefined) continue; // a highway's ramps share the avenue's lights
       // Traffic on this segment approaching the node travels toward it.
       const toward = s.a === n.id ? -1 : 1;
       const hx = s.axis === 'h' ? toward : 0, hy = s.axis === 'v' ? toward : 0;
       const rx = -hy, ry = hx;
       const back = (s.axis === 'h' ? n.wv : n.wh) / 2 + 0.8;
       const x = n.x - hx * back + rx * (s.width / 2 + 0.5), y = n.y - hy * back + ry * (s.width / 2 + 0.5);
-      // Under a highway's deck the signal hangs at the kerb, not out over the lanes.
-      const reach = s.width >= AVENUE_W - 0.1 ? 1.2 : s.lanes * LANE_W;
+      const reach = s.lanes * LANE_W;
       out.push({ x, y, rx, ry, reach, head: { x: x - rx * (reach - 0.3), y: y - ry * (reach - 0.3) }, node: n, axis: s.axis });
     }
   }
@@ -63,8 +60,8 @@ export class Breakables {
   /** Lamp-post style: down every road (not bridges), alternating sides, arms out over the road. */
   private alongRoads(city: City, kind: number, every: number): void {
     for (const s of city.segs) {
-      // Nothing down a trail through open country, up on a highway, or under one (its deck's in the way).
-      if (s.bridge || s.trail || s.way !== undefined || s.width >= AVENUE_W - 0.1) continue;
+      // Nothing down a trail through open country or on a bridge.
+      if (s.bridge || s.trail) continue;
       const len = s.axis === 'h' ? s.x1 - s.x0 : s.y1 - s.y0;
       const side = s.width / 2 + 0.6;
       for (let p = 16; p < len - 10; p += every) {

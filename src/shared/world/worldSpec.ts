@@ -21,8 +21,8 @@ export let LAND0 = DEFAULT_WORLD.margin;
 export let LAND1 = DEFAULT_WORLD.size - DEFAULT_WORLD.margin;
 
 export function installWorld(w: Partial<WorldSpec> | undefined): void {
-  // Clear what the last universe set first: an optional setting it had (Bayhaven's railway,
-  // highways) must not carry over into one that leaves it out.
+  // Clear what the last universe set first: an optional setting it had (Bayhaven's railway) must
+  // not carry over into one that leaves it out.
   for (const k of Object.keys(WORLD)) delete (WORLD as unknown as Record<string, unknown>)[k];
   Object.assign(WORLD, DEFAULT_WORLD, w ?? {});
   MAP_SIZE = WORLD.size;

@@ -63,6 +63,9 @@ export const REDROCK: Universe = {
     spacing: { near: 84, far: 150 }, arterialEvery: 3, ground: '#c4a274', modern: false,
     // People drawn the size they ride at, true to the horses beside them.
     pedScale: 1.1,
+    // Real land in open country: rolling prairie, mesas and canyons in the badlands; the towns
+    // stand on the flat.
+    terrain: { scale: 0.9 },
     // The railroad: one track down the middle of an east-west street (a Front Street), a depot in
     // each town it passes; a locomotive at each end of the train, two coaches between.
     railway: { style: 'grade', axis: 'h', at: 0.55, offset: 0, stationEvery: 3, trains: 1, cars: 4, car: 'coach', ends: 'locomotive',

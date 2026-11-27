@@ -77,10 +77,9 @@ export const BAYHAVEN: Universe = {
   tables: TABLES,
   venues: VENUES,
   friends: FRIENDS,
-  // The island's map is the default (worldSpec.ts), plus two highways (one stretch of them sunk)
-  // and the L: an elevated railway north-south through town, two trains of three cars.
+  // The island's map is the default (worldSpec.ts), plus the L: an elevated railway north-south
+  // through town, two trains of three cars.
   world: {
-    highways: { count: 2, sunken: 1 },
     railway: { style: 'elevated', axis: 'v', at: 0.3, stationEvery: 3, trains: 2, cars: 3, car: 'metro', speed: 16, dwell: 9, stationName: 'Station' },
   },
   cast,

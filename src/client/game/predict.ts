@@ -7,7 +7,6 @@ import { flies, floats } from '../../shared/sim/kinds';
 import type { StreetPropsView } from '../render/breakables';
 import type { CityMap } from '../../shared/world/city';
 import type { StaticWorld } from '../../shared/world/collision';
-import { crossing } from '../../shared/world/ways';
 
 interface Pending { seq: number; inp: InputMsg }
 
@@ -71,25 +70,12 @@ export class Predictor {
       }
       // A rig's trailer is predicted with the cab, so it answers the steering without lag.
       this.trailer = spec.trailer ? stepTrailer(b, spec, this.trailer, DT) : b.angle;
-      if (!floats(spec) && !(flies(spec) && b.alt > 1)) this.cross();
     } else {
       const ox = b.x, oy = b.y;
       stepFoot(b, c, PEDS[PLAYER_ARCHETYPE].runSpeed * (c.sprint ? SPRINT : 1), DT, this.world);
       blockBy(b, { r: PED_RADIUS }, this.obstacles);
       if (this.map.isWater(b.x, b.y) && !this.map.isWater(ox, oy)) { b.x = ox; b.y = oy; b.vx = 0; b.vy = 0; }
-      this.cross();
     }
-  }
-
-  /** Up or down a ramp past its switch: onto or off a highway's strip, as the server does
-   *  (world/ways.ts); the previous tick moves with it so drawing never sees a jump. */
-  private cross(): void {
-    const b = this.body;
-    const t = crossing(this.map.city.ways, b.x, b.y);
-    if (!t) return;
-    const dx = t.x - b.x;
-    b.x = t.x; b.y = t.y;
-    this.prev.x += dx;
   }
 
   /** Runs one local tick with this input. */

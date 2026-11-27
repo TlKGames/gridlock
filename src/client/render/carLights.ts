@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { VEHICLES, type Part, type VehicleSpec } from '../../shared/packs';
 import { VF } from '../../shared/protocol';
 import { hitchOffset } from '../../shared/sim/physics';
+import { groundAt } from '../../shared/world/terrain';
 import type { ParticleLayer } from './particles';
 
 /** Beam on the ground: narrow at the lamp, spreading and fading out ahead (u = along, v = across). */
@@ -67,15 +68,16 @@ function working(lampList: Lamp[], level: number, left: number, right: number): 
 
 /** Puts this frame's lights for one vehicle. `night` is 0 (day) to 1; `trailer` is the trailer's
  *  heading for rigs; `dents` the dent level of each side (front, rear, left, right). Nothing is
- *  drawn unless the vehicle has its lights on. */
+ *  drawn unless the vehicle has its lights on. `alt` is its height in the scene, `above` its height
+ *  over the hillside under it (world/terrain.ts), where the beams fall. */
 export function putCarLights(beams: ParticleLayer, glow: ParticleLayer, spec: VehicleSpec, type: number,
-  x: number, y: number, a: number, alt: number, trailer: number, flags: number, night: number, dents: number[]): void {
+  x: number, y: number, a: number, alt: number, above: number, trailer: number, flags: number, night: number, dents: number[]): void {
   if (!(flags & VF.lights) || flags & VF.wreck) return;
   // Lights come on at dusk, faint against the last of the daylight, full strength once it's dark.
   const k = 0.25 + 0.75 * night;
   const c = Math.cos(a), s = Math.sin(a);
   const l = lamps(type);
-  const ground = alt < 0.5; // aircraft don't throw beams on the road
+  const ground = above < 0.5; // aircraft don't throw beams on the road
   for (const h of working(l.head, dents[0], dents[2], dents[3])) {
     const lx = x + c * h.x - s * h.y, ly = y + s * h.x + c * h.y;
     glow.put(lx, ly, alt + h.z + 0.05, 1.1, 1, 0, 1, 0.96, 0.85, 0.85 * k);
@@ -83,7 +85,8 @@ export function putCarLights(beams: ParticleLayer, glow: ParticleLayer, spec: Ve
     // Toed out a touch, like real low beams.
     const toe = a + Math.sign(h.y) * 0.07;
     const tc = Math.cos(toe), ts = Math.sin(toe);
-    beams.put(lx + tc * (BEAM_LEN / 2), ly + ts * (BEAM_LEN / 2), 0.07, BEAM_W, BEAM_LEN / BEAM_W, toe, 1, 0.93, 0.78, 0.5 * k);
+    const bx = lx + tc * (BEAM_LEN / 2), by = ly + ts * (BEAM_LEN / 2);
+    beams.put(bx, by, groundAt(bx, by) + 0.07, BEAM_W, BEAM_LEN / BEAM_W, toe, 1, 0.93, 0.78, 0.5 * k);
   }
   // Tail lights: on the cab, or on the back of a rig's trailer.
   const brake = !!(flags & VF.brake), reverse = !!(flags & VF.reverse);
@@ -101,7 +104,7 @@ export function putCarLights(beams: ParticleLayer, glow: ParticleLayer, spec: Ve
   if (rear.length && ground) {
     const back = Math.min(...rear.map((t) => t.x)) - 1.6;
     const px = rx + rc * back, py = ry + rs * back;
-    glow.put(px, py, 0.07, 3.2, 1.5, ra + Math.PI / 2, 1, 0.1, 0.05, (brake ? 0.4 : 0.14) * k);
-    if (reverse) glow.put(px - rc * 1.2, py - rs * 1.2, 0.07, 3.6, 1.3, ra + Math.PI / 2, 1, 1, 0.95, 0.3 * k);
+    glow.put(px, py, groundAt(px, py) + 0.07, 3.2, 1.5, ra + Math.PI / 2, 1, 0.1, 0.05, (brake ? 0.4 : 0.14) * k);
+    if (reverse) glow.put(px - rc * 1.2, py - rs * 1.2, groundAt(px, py) + 0.07, 3.6, 1.3, ra + Math.PI / 2, 1, 1, 0.95, 0.3 * k);
   }
 }

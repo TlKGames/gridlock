@@ -8,13 +8,13 @@ export const TABLES: TableSpec[] = [
   { id: 'roulette', name: 'Roulette', game: 'roulette', stakes: [5, 1000] },
   { id: 'craps', name: 'Craps', game: 'craps', stakes: [5, 1000] },
   { id: 'blackjack', name: 'Blackjack', game: 'blackjack', stakes: [10, 2000] },
-  { id: 'holdem_25', name: 'Hold\'em 25/50', game: 'holdem', stakes: [25, 50], buyIn: [1000, 5000], players: 5, skill: 0.5, rake: [0.05, 300], sharps: 0.03, caught: 'throwOut' },
-  { id: 'holdem_100', name: 'High-limit hold\'em 100/200', game: 'holdem', stakes: [100, 200], buyIn: [5000, 20000], players: 5, skill: 0.68, rake: [0.05, 500], sharps: 0.04, caught: 'throwOut' },
+  { id: 'holdem_25', name: 'Hold\'em 25/50', game: 'holdem', stakes: [25, 50], buyIn: [1000, 5000], players: 5, skill: 0.5, rake: [0.05, 300], sharps: 0.03, caught: 'throwOut', model: 'poker_oval' },
+  { id: 'holdem_100', name: 'High-limit hold\'em 100/200', game: 'holdem', stakes: [100, 200], buyIn: [5000, 20000], players: 5, skill: 0.68, rake: [0.05, 500], sharps: 0.04, caught: 'throwOut', model: 'poker_oval' },
   // The crews' games: invite only the first time, sharks at the table, and they don't throw you out.
   { id: 'backroom', name: 'Back-room hold\'em 500/1000', game: 'holdem', stakes: [500, 1000], buyIn: [20000, 100000], players: 4, skill: 0.88, sharps: 0.15, caught: 'shoot' },
   // Friends' games: penny ante.
-  { id: 'garage_holdem', name: 'Garage hold\'em 1/2', game: 'holdem', stakes: [1, 2], buyIn: [40, 200], players: 4, skill: 0.15, caught: 'throwOut' },
-  { id: 'garage_draw', name: 'Garage five-card draw', game: 'draw', stakes: [1, 2], buyIn: [40, 200], players: 3, skill: 0.18, caught: 'throwOut' },
+  { id: 'garage_holdem', name: 'Garage hold\'em 1/2', game: 'holdem', stakes: [1, 2], buyIn: [40, 200], players: 4, skill: 0.15, caught: 'throwOut', model: 'folding' },
+  { id: 'garage_draw', name: 'Garage five-card draw', game: 'draw', stakes: [1, 2], buyIn: [40, 200], players: 3, skill: 0.18, caught: 'throwOut', model: 'folding' },
 ];
 
 export const VENUES: VenueSpec[] = [

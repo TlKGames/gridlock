@@ -1,6 +1,5 @@
 // Finding spawn spots: sidewalks for peds, lanes for traffic, roads for responders.
 import { LANE_W, type Block } from '../../../shared/world/cityTypes';
-import { LEVEL_BAND } from '../../../shared/world/levels';
 import type { World } from '../world';
 
 export interface Spot { x: number; y: number; angle: number }
@@ -30,38 +29,6 @@ export function pedSpawn(w: World, cx: number, cy: number, minD: number, maxD: n
     const spot = sidewalkPoint(w, b);
     if (!farFromPlayers(w, spot.x, spot.y, minD * 0.85) || w.map.isWater(spot.x, spot.y)) continue;
     return { spot, block: b };
-  }
-  return null;
-}
-
-/** A lane position up on a highway's deck between minD and maxD (over the ground) from (cx, cy):
- *  placed on the way's strip (world/levels.ts). */
-export function deckSpawn(w: World, cx: number, cy: number, minD: number, maxD: number): Spot | null {
-  // Deck segments passing within reach (measured over the ground).
-  const decks = w.city.segs.filter((s) => {
-    if (s.level === undefined) return false;
-    const px = Math.max(Math.min(s.x0, s.x1), Math.min(Math.max(s.x0, s.x1), cx)), py = Math.max(Math.min(s.y0, s.y1), Math.min(Math.max(s.y0, s.y1), cy));
-    return Math.hypot(px - cx, py - cy) < maxD;
-  });
-  for (let k = 0; k < 8 && decks.length; k++) {
-    const seg = w.rng.pick(decks);
-    const len = seg.axis === 'h' ? seg.x1 - seg.x0 : seg.y1 - seg.y0;
-    if (len < 30) continue;
-    // Somewhere along it at the right distance: around the point nearest us, either way.
-    const near = seg.axis === 'h' ? cx - seg.x0 : cy - seg.y0;
-    const tt = Math.max(12, Math.min(len - 12, near + (w.rng.chance(0.5) ? 1 : -1) * w.rng.range(minD, maxD)));
-    const bx = seg.axis === 'h' ? seg.x0 + tt : seg.x0, by = seg.axis === 'h' ? seg.y0 : seg.y0 + tt;
-    const d = Math.hypot(bx - cx, by - cy);
-    if (d < minD || d > maxD) continue;
-    const dir: 1 | -1 = w.rng.chance(0.5) ? 1 : -1;
-    const lane = w.rng.chance(0.5) ? 1 : 0;
-    const hx = seg.axis === 'h' ? dir : 0, hy = seg.axis === 'v' ? dir : 0;
-    const x = bx - hy * (lane + 0.5) * LANE_W + seg.level! * LEVEL_BAND, y = by + hx * (lane + 0.5) * LANE_W;
-    if (!farFromPlayers(w, x, y, minD * 0.85)) continue;
-    let blocked = false;
-    w.vehiclesNear(x, y, 14, () => { blocked = true; });
-    if (blocked) continue;
-    return { x, y, angle: Math.atan2(hy, hx) };
   }
   return null;
 }

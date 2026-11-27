@@ -78,7 +78,10 @@ const nearby = [...w.peds.values()].filter((p) => !p.player && Math.hypot(w.pedP
 check(nearby > 0, `street life around the building while upstairs (${nearby} peds)`);
 
 // Someone chasing you upstairs: to the door, then the lift, then up.
-const chaser = spawnPed(w, 0, tw.place.x + 6, tw.place.y + 6);
+// Out on the sidewalk in front of the door (away from the building's middle).
+const bc = w.city.buildings[tw.building].rect, bx = (bc.x0 + bc.x1) / 2, by = (bc.y0 + bc.y1) / 2;
+const od = Math.hypot(tw.place.x - bx, tw.place.y - by) || 1;
+const chaser = spawnPed(w, 0, tw.place.x + ((tw.place.x - bx) / od) * 5, tw.place.y + ((tw.place.y - by) / od) * 5);
 const target = fl.lift;
 const v1 = route(w, chaser, target.x, target.y);
 check(!!v1 && Math.hypot(v1.x - tw.place.x, v1.y - tw.place.y) < 3, 'a chaser outside heads for the door');

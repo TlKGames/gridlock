@@ -39,7 +39,9 @@ export const ZONES: ZoneSpec[] = [
       ground: ['#b5a06a', '#d0b07e', '#a89a62', '#c8b48a', '#9a9a5a'], trail: '#9a7a52',
       // Rolling grass and sage: gentle swells, pale sandy washes, drier tops.
       relief: 17, low: '#c9b47c', high: '#9a945c', boulders: 1.5,
-      brush: { density: 1.1, colors: ['#7a8a5a', '#6a7a4a', '#8a8a62', '#5e6a42'], size: [0.8, 2.2] } },
+      brush: { density: 1.1, colors: ['#7a8a5a', '#6a7a4a', '#8a8a62', '#5e6a42'], size: [0.8, 2.2] },
+      // Rolling range with the odd low bench, and creeks cut into shallow ravines.
+      mesas: { cover: 0.08, height: 7 }, gorges: { cover: 0.35, depth: 5, width: [7, 11], river: true } },
     wall: ['#888'], roof: ['#666'], trees: 0.06, parkingChance: 0, plazaChance: 0, pedDensity: 0.15,
     peds: [{ id: 'prospector', weight: 3 }, { id: 'rancher', weight: 3 }, { id: 'dry_creek_rider', weight: 0.6 }],
     trafficDensity: 0.25, traffic: [...riders, { id: 'covered_wagon', weight: 1.5 }, { id: 'stagecoach', weight: 1 }, lawRide],
@@ -48,11 +50,14 @@ export const ZONES: ZoneSpec[] = [
   },
   {
     id: 'badlands', name: 'Badlands', mapColor: '#8a4a32', ground: '#b8785a', sidewalk: '#b8785a', lot: noLot, layout: 'wild',
-    wild: { rocks: 2.2, rockSize: [12, 44], rockHeight: [9, 34], rockColor: ROCK, ponds: 0.02, pondSize: [8, 14],
+    // Rock spires and hoodoos between the mesas (the mesas themselves are the land: `mesas`).
+    wild: { rocks: 1.2, rockSize: [6, 18], rockHeight: [4, 14], rockColor: ROCK, ponds: 0.02, pondSize: [8, 14],
       ground: ['#b06a4a', '#c88a62', '#a85a3e', '#d0a070'], trail: '#8a5a3a',
       // Broken red country: steep rises banded in rock layers, pale sand in the washes.
       relief: 38, low: '#d6a87c', high: '#98503a', strata: ['#c88a62', '#a85a3e', '#d8b08a', '#8a4a32', '#b8785a'], boulders: 3,
-      brush: { density: 0.25, colors: ['#7a7a52', '#6a6a4a', '#8a7a5a'], size: [0.6, 1.6] } },
+      brush: { density: 0.25, colors: ['#7a7a52', '#6a6a4a', '#8a7a5a'], size: [0.6, 1.6] },
+      // Mesas behind sheer red walls, and canyons cut deep with a river at the bottom.
+      mesas: { cover: 0.3, height: 16 }, gorges: { cover: 0.6, depth: 12, width: [10, 17], river: true } },
     wall: ['#888'], roof: ['#666'], trees: 0.01, parkingChance: 0, plazaChance: 0, pedDensity: 0.1,
     peds: [{ id: 'vulture', weight: 3 }, { id: 'prospector', weight: 2 }],
     trafficDensity: 0.12, traffic: [{ id: 'mustang', weight: 3 }, { id: 'covered_wagon', weight: 1 }],

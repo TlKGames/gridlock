@@ -6,7 +6,6 @@ import { dist } from '../../../shared/math';
 import { flies } from '../../../shared/sim/kinds';
 import type { Interior } from '../../../shared/world/interiors';
 import { floorOf, groundOf, isWayStrip } from '../../../shared/world/levels';
-import { rampWalk } from '../../../shared/world/ways';
 import { StairIndex, stairwellOn } from '../../../shared/world/stairs';
 import { doorway } from '../ai/doors';
 import type { Ped, Player, Vehicle } from '../entities';
@@ -110,8 +109,8 @@ export function climbStairs(w: World, pl: Player, p: Ped): void {
 export function route(w: World, p: Ped, tx: number, ty: number): { x: number; y: number } | null {
   const tf = floorOf(tx), mf = floorOf(p.body.x);
   if (tf === mf) return mf === 0 ? doorway(w, p, tx, ty) : null;
-  // Up on a highway's deck, or heading for one: by way of a ramp (world/ways.ts).
-  if (isWayStrip(tf) || isWayStrip(mf)) return rampWalk(w.city.ways, p.body.x, p.body.y, tx, ty);
+  // A railway's viaduct (or a train on it): no walking up to it.
+  if (isWayStrip(tf) || isWayStrip(mf)) return null;
   const i = liftBuilding(w, tf > 0 ? tx : p.body.x, tf > 0 ? ty : p.body.y);
   if (!i) return null;
   const here = liftOn(i, mf), there = liftOn(i, tf);

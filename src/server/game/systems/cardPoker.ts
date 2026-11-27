@@ -22,8 +22,10 @@ export interface PokerGame {
   spec: TableSpec;
   /** The ped sat in each seat (seat 0 is you). */
   peds: number[];
-  /** Seconds until the next AI move, or the next deal. */
+  /** Seconds until the next AI move, or the next deal; and how long that wait was when it began
+   *  (the table shows the one to act thinking, the next deal coming). */
   wait: number;
+  waitTotal: number;
   /** Seats whose cards you've peeked at this hand; cheats you've pulled this hand. */
   peeked: Set<number>;
   cheated: Set<string>;
@@ -75,7 +77,7 @@ export function startPoker(w: World, pl: Player, spot: TableSpot, spec: TableSpe
   const t = newTable(spec.game === 'holdem' ? 'holdem' : spec.game === 'stud' ? 'stud' : 'draw', seats,
     draw ? [spec.stakes[0], spec.stakes[1]] : spec.stakes, draw ? spec.stakes[0] : 0, spec.rake?.[0] ?? 0, spec.rake?.[1] ?? 0);
   t.dealer = Math.floor(w.rng.next() * seats.length);
-  return { t, spec, peds, wait: 1.5, peeked: new Set(), cheated: new Set(), stacked: false, lastCheat: new Set() };
+  return { t, spec, peds, wait: 1.5, waitTotal: 1.5, peeked: new Set(), cheated: new Set(), stacked: false, lastCheat: new Set() };
 }
 
 /** Everyone sat at the table goes home (you stay where you are). */
@@ -109,27 +111,34 @@ export function tickPoker(w: World, g: PokerGame, dt: number, log: (s: string) =
     deal(t, w.rng);
     if (g.stacked) { stackHand(t); g.stacked = false; }
     aiCheats(w, t, log);
-    g.wait = 0.8;
+    g.wait = g.waitTotal = 0.8 + thinkTime(w, t);
     return true;
   }
   if (t.toAct > 0) {
     const a = aiAct(t, t.toAct, w.rng);
     act(t, t.toAct, a);
-    g.wait = 0.6 + w.rng.next() * 0.9 + (a.kind === 'raise' ? 0.6 : 0);
-    // (act moves the hand on: it may be over now)
-    if ((t.street as string) === 'show') g.wait = 4;
+    // (act moves the hand on: it may be over now) The next one to act thinks it over.
+    g.wait = g.waitTotal = (t.street as string) === 'show' ? 4 : thinkTime(w, t);
     return true;
   }
   return changed;
 }
 
 /** Your move at the table. */
-export function pokerMove(g: PokerGame, a: PokerAction): string | null {
+export function pokerMove(w: World, g: PokerGame, a: PokerAction): string | null {
   const t = g.t;
   if (t.toAct !== 0) return 'Not your turn.';
   const err = act(t, 0, a);
-  g.wait = t.street === 'show' ? 4 : 0.7;
+  // The next one thinks it over (or the pot's pushed and the next deal waits).
+  g.wait = g.waitTotal = t.street === 'show' ? 4 : thinkTime(w, t);
   return err;
+}
+
+/** How long the one to act (if it's not you) takes over it: longer facing a bet. */
+function thinkTime(w: World, t: PokerTable): number {
+  if (t.toAct <= 0) return 0.7;
+  const facing = t.currentBet > t.seats[t.toAct].bet;
+  return 0.8 + w.rng.next() * 1.1 + (facing ? 0.5 : 0);
 }
 
 // ---- Cheating ----------------------------------------------------------------------------------
@@ -241,7 +250,7 @@ export function callOut(w: World, g: PokerGame, k: number, me: Ped): { right: bo
     t.seats[0].stack += s.stack + 0;
     s.stack = 0; s.out = true; s.folded = true;
     t.street = 'show'; t.toAct = -1; t.result = null;
-    g.wait = 3;
+    g.wait = g.waitTotal = 3;
     return { right: true, text: `You call ${s.name} a cheat, and you're right. You draw first.` };
   }
   return { right: false, text: `${s.name} wasn't cheating. He's going for his gun.` };

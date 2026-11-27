@@ -1,0 +1,179 @@
+/* The card and casino tables' screen (hud/tableRoom.ts): the shops' box, the table drawn on the left. */
+.tableroom .garage-box { width: min(1180px, calc(100vw - 32px)); height: min(700px, calc(100vh - 32px)); }
+.tableroom .garage-side { width: 360px; }
+.tr-view { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative;
+  background: radial-gradient(ellipse at 50% 40%, #2a1f18 0%, #140f0c 60%, #0a0807 100%); }
+.tr-felt { flex: 1; position: relative; min-height: 0; }
+.tr-log { flex: none; min-height: 64px; padding: 8px 18px 12px; font-size: 13px; color: #d9cfb8; background: linear-gradient(transparent, rgba(0,0,0,0.55)); }
+.tr-log div:not(:last-child) { opacity: 0.55; }
+.tr-log div:last-child { color: #fff3d0; }
+
+/* The felt: green baize with a padded rail of dark wood and a brass line inside it. */
+.felt { position: absolute; inset: 26px; color: #f3ead2;
+  background: radial-gradient(ellipse at 50% 45%, #2f8a55 0%, #1f6b3e 55%, #144a2b 100%);
+  border: 16px solid #3b2416; box-shadow: inset 0 0 0 2px #c9a24a, inset 0 0 60px rgba(0,0,0,0.55), 0 0 0 3px #1a0f08, 0 14px 40px rgba(0,0,0,0.7);
+  background-clip: padding-box; }
+.felt::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0.18;
+  background: repeating-linear-gradient(45deg, rgba(0,0,0,0.25) 0 1px, transparent 1px 3px); }
+.felt.oval { border-radius: 50% / 46%; border-width: 22px; border-color: #4a2c18; }
+.felt.half { border-radius: 14px 14px 50% 50% / 14px 14px 58% 58%; border-width: 20px; }
+.felt.roulette, .felt.dicefelt, .felt.faro { border-radius: 26px; }
+.felt-word { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 40px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(243,234,210,0.85); text-shadow: 0 2px 0 rgba(0,0,0,0.35); }
+.felt-line { position: absolute; left: 0; right: 0; top: calc(40% + 54px); text-align: center; font-size: 17px; color: #e9cf86; letter-spacing: 0.08em; }
+.felt-note { text-align: center; font-size: 13px; color: rgba(243,234,210,0.7); letter-spacing: 0.04em; }
+.felt > .felt-note.at { position: absolute; left: 0; right: 0; top: calc(40% + 84px); }
+.felt-arc { position: absolute; left: 0; right: 0; top: 34%; text-align: center; font-size: 15px; letter-spacing: 0.3em; text-transform: uppercase; color: #e9cf86; opacity: 0.8; }
+
+/* Playing cards. */
+.pcs { display: inline-flex; gap: 6px; }
+.pc { position: relative; display: inline-block; width: 54px; height: 76px; border-radius: 6px; background: linear-gradient(#fffdf6, #efe9da); color: #17181b;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(0,0,0,0.12); font-weight: 700; flex: none; }
+.pc b { position: absolute; left: 5px; top: 3px; font-size: 17px; line-height: 1; }
+.pc i { position: absolute; left: 0; right: 0; top: 24px; text-align: center; font-style: normal; font-size: 34px; line-height: 1; }
+.pc.red { color: #c0262d; }
+.pc.back { background: #f2eee2; box-shadow: 0 2px 5px rgba(0,0,0,0.55); }
+.pc.back::after { content: ''; position: absolute; inset: 4px; border-radius: 3px; background: repeating-linear-gradient(45deg, #2b4a8a 0 3px, #1d3768 3px 6px); }
+.pc.sm { width: 36px; height: 51px; border-radius: 4px; }
+.pc.sm b { font-size: 12px; left: 3px; top: 2px; }
+.pc.sm i { font-size: 22px; top: 18px; }
+.pc.pick { cursor: pointer; transition: transform 0.12s; }
+.pc.pick:hover { transform: translateY(-4px); }
+.pc.thrown { transform: translateY(-14px) rotate(-4deg); opacity: 0.55; outline: 2px solid #ffcc33; }
+
+/* Chips. */
+.tchip { display: inline-block; padding: 4px 9px; border-radius: 999px; background: #b3262c; color: #fff; font-size: 12px; font-weight: 700;
+  border: 2px dashed rgba(255,255,255,0.75); box-shadow: 0 2px 4px rgba(0,0,0,0.5); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Poker: seats round the oval, the board and pot in the middle. */
+.tseat { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
+.tseat .tname { font-size: 13px; font-weight: 700; padding: 2px 9px; border-radius: 10px; background: rgba(0,0,0,0.55); white-space: nowrap; }
+.tseat .tstack { font-size: 12px; color: #e9cf86; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.tseat.you .tname { background: #ffcc33; color: #111; }
+.tseat.acting .tname { box-shadow: 0 0 0 2px #ffcc33, 0 0 14px rgba(255,204,51,0.7); }
+.tseat.dim { opacity: 0.45; }
+.dbtn { display: inline-block; margin-left: 6px; width: 17px; height: 17px; line-height: 17px; border-radius: 50%; background: #fff; color: #111; font-style: normal; font-size: 11px; }
+.tbet { position: absolute; transform: translate(-50%, -50%); }
+.tcentre { position: absolute; left: 50%; top: 47%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.tpot { font-size: 18px; font-weight: 700; color: #fff3d0; text-shadow: 0 2px 3px #000; }
+.tstreet { font-size: 12px; letter-spacing: 0.25em; text-transform: uppercase; color: rgba(243,234,210,0.6); }
+
+/* Blackjack / twenty-one. */
+.tdealer { position: absolute; left: 50%; top: 9%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.thands { position: absolute; left: 0; right: 0; bottom: 14%; display: flex; justify-content: center; gap: 40px; }
+.thand { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.thand.acting .pcs { filter: drop-shadow(0 0 8px rgba(255,204,51,0.8)); }
+.tdealer .tname, .thand .tname { font-size: 14px; font-weight: 700; padding: 2px 10px; border-radius: 10px; background: rgba(0,0,0,0.5); }
+.tout { font-size: 15px; font-weight: 700; color: #ffe38a; text-shadow: 0 2px 3px #000; }
+
+/* Roulette: the ball's number, the last spins, and the betting layout. */
+.felt.roulette { display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 18px 22px; }
+.rtop { display: flex; align-items: center; gap: 14px; }
+.rball { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; font-weight: 800; color: #fff; border: 3px solid #c9a24a; box-shadow: 0 3px 8px rgba(0,0,0,0.6); flex: none; }
+.rhist { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+.rh { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; }
+.rtop .felt-note { flex: none; max-width: 120px; text-align: right; }
+.red { --rc: #b3262c; } .black { --rc: #1b1b1e; } .green { --rc: #13804a; }
+.rball, .rh, .rc { background: var(--rc, #333); }
+.rgrid { display: flex; gap: 0; border: 2px solid #e8dcc0; }
+.rzero { display: flex; flex-direction: column; width: 46px; }
+.rzero .rc { flex: 1; }
+.rnums { flex: 1; display: grid; grid-template-columns: repeat(12, 1fr); }
+.rc, .ro { padding: 0; height: 40px; border-radius: 0; border: 1px solid rgba(232,220,192,0.75); color: #fff; font-weight: 700; font-size: 14px; letter-spacing: 0; }
+.rc:hover, .ro:hover { filter: brightness(1.35); box-shadow: inset 0 0 0 2px #ffcc33; }
+.rc.hit { box-shadow: inset 0 0 0 3px #ffcc33; }
+.ro { background: transparent; }
+.ro.red, .ro.black { background: var(--rc); }
+.rdoz, .routs { display: grid; gap: 0; margin-left: 46px; border: 2px solid #e8dcc0; border-top: none; }
+.rdoz { grid-template-columns: repeat(3, 1fr); } .routs { grid-template-columns: repeat(6, 1fr); }
+
+/* Faro: the spade layout round the dealer's box. */
+.felt.faro { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; }
+.frow, .fmid { display: flex; gap: 10px; align-items: center; }
+.frank { position: relative; padding: 4px; background: transparent; border: 1px solid transparent; border-radius: 6px; }
+.frank:hover { border-color: #ffcc33; background: rgba(0,0,0,0.15); }
+.frank .tchip { position: absolute; left: 50%; bottom: -10px; transform: translateX(-50%); font-size: 10px; padding: 2px 6px; }
+.fbox { min-width: 260px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 16px; border: 1px solid rgba(201,162,74,0.6); border-radius: 8px; background: rgba(0,0,0,0.18); }
+.fbox .tname { font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: #e9cf86; }
+.fturn { display: flex; gap: 22px; }
+.fturn span { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.fturn em { font-style: normal; font-size: 11px; color: rgba(243,234,210,0.7); text-transform: uppercase; letter-spacing: 0.1em; }
+.tsaid { font-size: 14px; color: #fff3d0; text-align: center; }
+
+/* Slots: a cabinet, three reels behind glass, the pay table. */
+.felt.machine { border-radius: 30px 30px 14px 14px; border: 14px solid #8e1b1f; box-shadow: inset 0 0 0 3px #e3c26a, 0 0 0 3px #3a0a0c, 0 14px 40px rgba(0,0,0,0.7);
+  background: linear-gradient(#5a1013, #2a0709); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; }
+.felt.machine::before { display: none; }
+.tmachine { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.treels { position: relative; display: flex; gap: 10px; padding: 14px; border-radius: 12px; background: linear-gradient(#c9ced6, #7b828c); box-shadow: inset 0 2px 8px rgba(0,0,0,0.6); }
+.treel { width: 110px; height: 140px; display: grid; place-items: center; font-size: 62px; border-radius: 6px; background: linear-gradient(#bdbdbd, #fff 25%, #fff 75%, #bdbdbd); color: #b3262c; font-weight: 900; }
+.treel.word { font-size: 34px; color: #1b1b1e; letter-spacing: 0.04em; }
+.tline { position: absolute; left: 6px; right: 6px; top: 50%; height: 2px; background: rgba(214,40,40,0.75); }
+.twon { font-size: 22px; font-weight: 800; letter-spacing: 0.08em; color: rgba(255,243,208,0.6); text-transform: uppercase; }
+.twon.on { color: #ffe38a; text-shadow: 0 0 14px rgba(255,204,51,0.9); }
+.tpay { display: grid; grid-template-columns: repeat(4, auto); gap: 4px 18px; font-size: 13px; color: #f3ead2; padding: 10px 16px; border-radius: 8px; background: rgba(0,0,0,0.35); }
+.tpay b { color: #ffe38a; }
+
+/* Dice: white with black pips. */
+.tdie { display: inline-grid; grid-template-columns: repeat(3, 1fr); gap: 3px; width: 46px; height: 46px; padding: 6px; border-radius: 8px;
+  background: linear-gradient(#fff, #e9e4d6); box-shadow: 0 3px 6px rgba(0,0,0,0.6); margin: 0 4px; }
+.tdie i { border-radius: 50%; }
+.tdie i.on { background: #17181b; }
+.tdice { display: flex; justify-content: center; }
+.felt.dicefelt { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px; }
+.felt.dicefelt .felt-arc { position: static; }
+.hboard { display: flex; gap: 24px; }
+.hboard span { display: flex; flex-direction: column; align-items: center; min-width: 90px; padding: 8px 14px; border: 1px solid rgba(201,162,74,0.6); border-radius: 8px; font-size: 30px; font-weight: 800; }
+.hboard em { font-style: normal; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: #e9cf86; }
+
+/* Craps: the layout as it's painted on the table. */
+.felt.crapsfelt { border-radius: 22px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.ctop { display: flex; align-items: center; gap: 14px; min-height: 52px; }
+.ctop .tdie { width: 40px; height: 40px; padding: 5px; }
+.ctop .tsaid { flex: 1; text-align: left; font-size: 16px; font-weight: 600; }
+.cpuck { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-style: normal; font-size: 11px; font-weight: 800; background: #1b1b1e; color: #fff; border: 2px solid #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.6); flex: none; }
+.cpuck.on { background: #fff; color: #111; border-color: #111; position: absolute; top: 4px; right: 4px; width: 30px; height: 30px; font-size: 10px; }
+.clayout { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.cmain { flex: 1; display: flex; flex-direction: column; gap: 0; border: 2px solid #f3ead2; border-radius: 8px; overflow: hidden; }
+.felt button.cnum, .felt button.cband, .felt button.cdc, .felt button.cprop { position: relative; background: transparent; color: #f3ead2; border: 1px solid rgba(243,234,210,0.75); border-radius: 0; padding: 4px 6px; letter-spacing: 0.08em; font-weight: 800; }
+.felt button.cnum:hover, .felt button.cband:hover, .felt button.cdc:hover, .felt button.cprop:hover { background: rgba(255,204,51,0.12); box-shadow: inset 0 0 0 2px #ffcc33; }
+.cnums { display: grid; grid-template-columns: 0.8fr repeat(6, 1fr); flex: 1.5; }
+.cdc { font-size: 11px; line-height: 1.25; }
+.cnum { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.cnum.point { background: rgba(255,255,255,0.08) !important; }
+.cword { font-size: 26px; color: #ffe38a; font-family: Georgia, 'Times New Roman', serif; }
+.cband { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 20px; }
+.cband.come { color: #ffe38a !important; font-size: 26px; flex: 1.2; }
+.cband.field { flex: 1.2; font-size: 15px; }
+.cfield { font-size: 17px; letter-spacing: 0.02em; }
+.cfield b { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; border: 2px solid #ffe38a; color: #ffe38a; }
+.cfield i { font-style: normal; font-size: 9px; letter-spacing: 0.05em; margin: 0 6px 0 3px; color: #ffe38a; }
+.cband.dont { font-size: 14px; }
+.cband.pass { font-size: 22px; color: #fff !important; }
+.cbox { width: 34%; display: flex; flex-direction: column; gap: 4px; }
+.cbox-h { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: #e9cf86; text-align: center; }
+.chard, .cprops { display: grid; grid-template-columns: 1fr 1fr; border: 2px solid #f3ead2; border-radius: 6px; overflow: hidden; }
+.cprop { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 52px; font-size: 15px; }
+.cprop.wide { grid-column: span 2; color: #ff8a80 !important; }
+.cprop em { font-style: normal; font-size: 10px; color: #ffe38a; letter-spacing: 0.05em; }
+.cprop .tdie { width: 22px; height: 22px; padding: 3px; gap: 1px; margin: 0 1px; border-radius: 4px; }
+.cchip { position: relative; display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 999px; background: #b3262c; color: #fff; font-size: 11px; font-weight: 700;
+  border: 2px dashed rgba(255,255,255,0.8); box-shadow: 0 2px 4px rgba(0,0,0,0.5); letter-spacing: 0; white-space: nowrap; }
+.cchip em { font-style: normal; color: #ffe38a; }
+
+/* The side: moves as buttons under headings; the keyboard/pad's pick ringed. */
+.tr-side { gap: 10px; }
+.tr-groups { flex: 1 1 auto; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; scrollbar-color: #3a3f47 transparent; padding: 2px; }
+.tr-gname { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+.tr-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tr-btns.chips { display: flex; flex-wrap: wrap; }
+.tr-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 8px 10px; background: #14171c; border: 1px solid var(--line); border-radius: 6px; text-align: left; font-size: 14px; letter-spacing: 0; }
+.tr-btns.chips .tr-btn { flex: 1 1 54px; align-items: center; text-align: center; padding: 7px 6px; }
+.tr-btn em { font-style: normal; font-size: 12px; color: var(--dim); }
+.tr-btn b { font-size: 12px; color: var(--cash); font-weight: 600; }
+.tr-btn.on { border-color: var(--accent); background: #1b1f26; color: var(--accent); }
+.tr-side .kf { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tableroom .garage-actions { margin-top: 0; flex: none; }
+.tableroom .gs-buy { display: flex; justify-content: center; align-items: baseline; gap: 10px; }
+.tableroom .gs-buy span { color: #111; margin: 0; }
+.tableroom .gs-buy b { color: #1d5c34; font-weight: 700; }
+.tableroom .gs-buy em { font-style: normal; color: #333; }

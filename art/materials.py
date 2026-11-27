@@ -59,6 +59,12 @@ PALETTE = {
     "coach_yellow": ((0.80, 0.58, 0.17), 0.10, 0.50, "fixed"),
     "lacquer":      ((0.035, 0.035, 0.04), 0.20, 0.30, "fixed"),
     "army_blue":    ((0.17, 0.21, 0.31), 0.10, 0.70, "fixed"),
+    # casino and card-room furniture (furniture.py): the client prints each game's layout on
+    # `felt`, shows the reels on `screen` and lights `sign`
+    "felt":         ((0.10, 0.40, 0.23), 0.00, 0.95, "felt"),
+    "green":        ((0.07, 0.45, 0.20), 0.10, 0.40, "fixed"),
+    "screen":       ((0.92, 0.92, 0.88), 0.10, 0.20, "screen"),
+    "sign":         ((0.98, 0.78, 0.25), 0.10, 0.30, "sign"),
     # weapons (names match the client's looks in render/weaponMesh.ts)
     "w_steel":    ((0.44, 0.46, 0.48), 0.80, 0.38, "steel"),
     "w_black":    ((0.12, 0.125, 0.135), 0.50, 0.50, "black"),

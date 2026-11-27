@@ -3,6 +3,7 @@ import type { Interior } from './interiors';
 import type { Way } from './wayTypes';
 import type { Railway } from './railgen';
 import type { TableSpot } from './tables';
+import type { Terrain } from './terrain';
 
 /** Map size and the land's edges come from the installed universe (worldSpec.ts). */
 export { LAND0, LAND1, MAP_SIZE } from './worldSpec';
@@ -22,8 +23,9 @@ export interface RoadLine {
   lanes: number;        // per direction
   parking: boolean;     // parking lane on each curb
   arterial: boolean;
-  /** A highway runs over this avenue (world/waygen.ts): it's widened for the ramp lanes. */
-  highway?: boolean;
+  /** Not a street: an elevated railway's corridor through the middle of a row of blocks (world/
+   *  corridors.ts, railgen.ts), the blocks either side backing onto it. */
+  rail?: boolean;
 }
 
 export interface RoadNode {
@@ -34,8 +36,6 @@ export interface RoadNode {
   lights: boolean;
   wv: number;           // width of the vertical road through this node
   wh: number;           // width of the horizontal road through this node
-  /** On a way's deck (its strip, world/levels.ts); x, y are still the ground point under it. */
-  level?: number;
 }
 
 export interface Segment {
@@ -49,12 +49,6 @@ export interface Segment {
   bridge: boolean;
   /** A trail through open country: a dirt road, no markings (roadgen.ts). */
   trail?: boolean;
-  /** Part of a way (world/waygen.ts): its index. A deck segment has `level` (the way's strip); a
-   *  ramp has a `path` (its lane, in driving order, ground coordinates) and runs one way, a to b. */
-  way?: number;
-  level?: number;
-  oneway?: boolean;
-  path?: { x: number; y: number }[];
 }
 
 /** `wild`: open country (zone layout 'wild'): ground, rock formations, ponds. */
@@ -156,10 +150,12 @@ export interface City {
   bridges: Rect[];
   /** Walk-in ground floors (world/interiors.ts). */
   interiors: Interior[];
-  /** Raised and sunken ways: highways (world/waygen.ts), and an elevated railway's viaduct. */
+  /** Raised ways: an elevated railway's viaduct (world/railgen.ts). */
   ways: Way[];
   /** The railway, if the universe has one (world/railgen.ts). */
   railway?: Railway;
   /** Card and casino tables (world/tables.ts). */
   tables: TableSpot[];
+  /** The ground's height in open country (world/terrain.ts); absent: flat. */
+  terrain?: Terrain;
 }

@@ -83,7 +83,7 @@ function interpolate(e: ViewEntity, rt: number): void {
   }
   const span = b.t - a.t;
   let t = span > 0 ? Math.max(0, Math.min(1, (rt - a.t) / span)) : 1;
-  // Between the street and a highway's strip (or a lift's floors: world/levels.ts) there's no
+  // Between the street and a viaduct's strip (or a lift's floors: world/levels.ts) there's no
   // in-between: take one side or the other.
   if (Math.abs(b.d[L.x] - a.d[L.x]) > 1000) t = t < 0.5 ? 0 : 1;
   const ox = e.x, oy = e.y;

@@ -126,8 +126,37 @@ film's names, characters, story, map or look).
    City.rocks) is round in plan and solid as circles: formations of mesa/butte columns on the high
    ground with talus at their feet, and loose boulders (render/rocks.ts: stepped, banded columns and
    faceted stones). Brush (render/brush.ts) is 3D bushes, not solid, thickest in the washes, built
-   and dropped with each ground chunk. Real elevation (slopes you climb) is a possible later step on
-   the same height map.
+   and dropped with each ground chunk.
+   Real land (2026-11-26): WorldSpec.terrain { scale } gives open country real height and
+   landforms; Bayhaven has none and stays flat. world/terrainGen.ts builds, in generateCity, smooth
+   fields on an 8 m grid (City.terrain): the broad swell (relief.ts `swell`: the long octaves only,
+   (swell - 0.5) x WildSpec.relief x scale); plateaus (WildSpec.mesas { cover, height }: rims where
+   a noise field crosses the level its cover asks for, held back ~16 m from trails along a wavering
+   line, a second tier on tall ones, `ramp` noise breaking a rim into a climbable slope); gorges
+   (WildSpec.gorges { cover, depth, width, river }: courses where another field crosses a half,
+   opened by a slow gate). Each zone's nouns blend over ~80 m. Towns, ponds and the river (plus a
+   step round them) and a grade railway's bed are level, the land easing in over 60 m (wobbled
+   distance transform). world/terrain.ts `groundOf` interpolates the fields and applies the sharp
+   profiles at each point asked: a mesa's 5 m sheer wall over a talus skirt, a canyon's sheer walls
+   (a ledge in wide ones) and flat floor, a river on deep floors (`water`: CityMap.isWater counts
+   it). Trestles: wherever a trail crosses a cut over 1.2 m, a deck from rim to rim (Terrain.
+   trestles, indexed per cell); groundOf stands you on it (`raw` ignores decks). Generation clears
+   rock, fixtures and trees off cliff faces, canyon walls and rivers (clearLand). Redrock: prairie
+   swells with low benches and creek ravines; badlands mesas 16 m (+7 tier) and 12 m canyons;
+   about -22..+25 m. Bodies keep z over their own ground. Movement (shared, predicted): top speed
+   x slopeFactor of the grade (a 10% climb about -25%, descents up to +10%, never below 40%);
+   wheels feel 0.6 g along it; moveOnGround holds any ground body back from a step steeper than
+   CLIFF (1.25) and slides it along the edge, no crash (one already on a face may move down off it).
+   StaticWorld.raycast (shots, lookouts, witnesses, robbery, AI sight) is blocked where the ground
+   rises over the line between two eye heights (terrainHit). Lobbed projectiles fly at true height;
+   straight shots keep their height over the ground. Client: installTerrain + `groundAt`;
+   heightAt (ways.ts) adds it, so everything drawn follows the land, mounts and wagons pitched.
+   Ground chunks (render/terrainMesh.ts) are bent planes, a vertex every 2 m (1 m in chunks with
+   cliffs), normals from the land itself, casting and receiving shadow; steep faces are drawn in the
+   zone's strata by height in the shader. The painting (groundRelief.ts) reads as a relief map from
+   straight above: hillshade from the true slopes, darker down in canyons, a bright lip on rims,
+   rivers on gorge floors. render/trestles.ts: plank deck, rails, braced bents down to the floor.
+   A chunk builds in 11-19 ms. Check: scripts/terrain.ts.
    Soundtrack (2026-11-26): music that isn't a radio (the western has no stations). Songs in
    <contentDir>/soundtrack/, tracks.json giving each its title and `regions` (zone ids; none =
    anywhere). Server: server/soundtrack.ts lists and serves them (/api/soundtrack, /soundtrack/).

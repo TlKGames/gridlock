@@ -64,7 +64,7 @@ export class Sound {
   private muted: boolean;
   listenerX = 0;
   listenerY = 0;
-  /** How high you are: an upper floor, a highway's deck (0 = the street). */
+  /** How high you are: an upper floor, a train's viaduct (0 = the street). */
   listenerZ = 0;
 
   /** Music (radio) volume, 1–100, separate from the game's sounds. */
@@ -121,9 +121,9 @@ export class Sound {
   /** Distance gain for a world position (null = at the listener). */
   private falloff(x: number | null, y: number | null): number {
     if (x === null || y === null) return 1;
-    // Upper floors and highways sit off the map (world/levels.ts): back over the street, and the
-    // height between you and the sound muffles it like a good stretch of distance (floors and walls
-    // more than a highway's open air).
+    // Upper floors and a train's viaduct sit off the map (world/levels.ts): back over the street, and
+    // the height between you and the sound muffles it like a good stretch of distance (floors and
+    // walls more than a viaduct's open air).
     const g = groundOf(x, y);
     const k = isWayStrip(g.f) ? 1.5 : 4;
     const d = Math.hypot(g.x - this.listenerX, g.y - this.listenerY, (heightAt(x, y) - this.listenerZ) * k);

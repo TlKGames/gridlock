@@ -8,7 +8,7 @@ import { removePed, removeVehicle, seatPed, spawnPed, spawnVehicle } from '../fa
 import { setTask } from '../ai/tasks';
 import type { World } from '../world';
 import { gangCarColor, gangMember, pedPool, turfGang } from '../../../shared/world/gangTurf';
-import { deckSpawn, laneSpawn, pedSpawn } from './spawnPoints';
+import { laneSpawn, pedSpawn } from './spawnPoints';
 import { groundOf } from '../../../shared/world/levels';
 import { mooredBoats } from './moorings';
 
@@ -112,7 +112,7 @@ export class Population {
   private countNear(x: number, y: number, r: number): { peds: number; cars: number } {
     let peds = 0, cars = 0;
     const r2 = r * r;
-    // Measured over the ground: traffic up on a highway's deck is round here too.
+    // Measured over the ground: riders on a train's viaduct are round here too.
     const d2 = (bx: number, by: number) => { const g = groundOf(bx, by); return dist2(x, y, g.x, g.y); };
     for (const p of this.w.peds.values()) {
       if (!p.player && !p.persistent && !p.dead && !p.vehicle && d2(p.body.x, p.body.y) < r2) peds++;
@@ -184,9 +184,7 @@ export class Population {
     const have = this.countNear(x, y, 180).cars;
     const cap = Math.min(RULES.carCap, RULES.carCapPerPlayer * w.players.size);
     for (let k = 0; k < Math.min(2, want - have) && this.totals().cars < cap; k++) {
-      // Near a highway, some of the traffic is up on it.
-      const s = (w.city.ways.length && w.rng.chance(0.35) ? deckSpawn(w, x, y, RULES.spawnRadius[0] + 10, RULES.spawnRadius[1]) : null)
-        ?? laneSpawn(w, x, y, RULES.spawnRadius[0] + 10, RULES.spawnRadius[1]);
+      const s = laneSpawn(w, x, y, RULES.spawnRadius[0] + 10, RULES.spawnRadius[1]);
       if (!s) continue;
       const sz = w.map.zoneAt(s.x, s.y);
       const zone = sz < 0 ? zi : sz;

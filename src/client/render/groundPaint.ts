@@ -6,8 +6,6 @@ import { LAND0, LAND1, LANE_W, MAP_SIZE, type Segment } from '../../shared/world
 import { WORLD } from '../../shared/world/worldSpec';
 import { hasWild, paintRelief } from './groundRelief';
 import { boardwalk, grid, paintLot } from './lotPaint';
-import { AVENUE_W, wayPoint } from '../../shared/world/wayTypes';
-import { trenchHoles } from '../../shared/world/ways';
 
 export const CHUNK = 128;
 export const PX = 4; // pixels per metre
@@ -34,7 +32,9 @@ function noisePattern(): HTMLCanvasElement {
   return noise;
 }
 
-export function paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCanvasElement): void {
+/** Paints one chunk's ground. A generator: it pauses now and then (render/ground.ts spreads a
+ *  chunk's painting over frames). */
+export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCanvasElement): Generator<void> {
   const city = map.city;
   const size = CHUNK * PX;
   canvas.width = canvas.height = size;
@@ -51,7 +51,7 @@ export function paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCan
   }
   rect(LAND0, LAND0, LAND1, LAND1, WORLD.ground);
   // Open country's ground from the lie of the land (groundRelief.ts); towns and roads go over it.
-  if (hasWild()) { paintRelief(ctx, map, X0, Y0, CHUNK); grain(ctx, map, cx, cy); }
+  if (hasWild()) { yield* paintRelief(ctx, map, X0, Y0, CHUNK); grain(ctx, map, cx, cy); yield; }
   const r = map.river;
   if (r && inView(0, r.y0, MAP_SIZE, r.y1)) {
     // Embankment: concrete in a modern city, a muddy bank before.
@@ -59,27 +59,21 @@ export function paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCan
     rect(X0, r.y0, X1, r.y1, WATER);
   }
 
-  // A highway's corridor (no street along it): a grass verge, mown in stripes, with a gravel shoulder
-  // at each edge; the cross streets are painted over it, and the trench is cut out below.
-  for (const w of city.ways) {
-    if (w.kind !== 'highway') continue;
-    const p = wayPoint(w, LAND0, -AVENUE_W / 2), q = wayPoint(w, LAND1, AVENUE_W / 2);
-    const x0 = Math.min(p.x, q.x), y0 = Math.min(p.y, q.y), x1 = Math.max(p.x, q.x), y1 = Math.max(p.y, q.y);
-    if (!inView(x0, y0, x1, y1)) continue;
-    rect(x0, y0, x1, y1, '#8a877e');
-    const g0 = wayPoint(w, LAND0, -AVENUE_W / 2 + 1.2), g1 = wayPoint(w, LAND1, AVENUE_W / 2 - 1.2);
-    rect(Math.min(g0.x, g1.x), Math.min(g0.y, g1.y), Math.max(g0.x, g1.x), Math.max(g0.y, g1.y), '#66734f');
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    for (let a = Math.floor(Math.max(LAND0, w.axis === 'h' ? X0 : Y0) / 6) * 6; a < Math.min(LAND1, w.axis === 'h' ? X1 : Y1); a += 12) {
-      const s = wayPoint(w, a, -AVENUE_W / 2 + 1.2), e = wayPoint(w, a + 6, AVENUE_W / 2 - 1.2);
-      ctx.fillRect(Math.min(s.x, e.x), Math.min(s.y, e.y), Math.abs(e.x - s.x), Math.abs(e.y - s.y));
+  // A railway's own corridor (world/corridors.ts): a paved alley under the viaduct.
+  for (const [lines, v] of [[city.xs, true], [city.ys, false]] as const) {
+    for (const l of lines) {
+      if (!l.rail) continue;
+      const r = v ? { x0: l.pos - l.width / 2, x1: l.pos + l.width / 2, y0: LAND0, y1: LAND1 } : { x0: LAND0, x1: LAND1, y0: l.pos - l.width / 2, y1: l.pos + l.width / 2 };
+      if (!inView(r.x0, r.y0, r.x1, r.y1)) continue;
+      rect(r.x0, r.y0, r.x1, r.y1, WORLD.modern ? '#6f6c66' : '#6e5a40');
+      ctx.fillStyle = 'rgba(0,0,0,0.07)';
+      for (let a = Math.floor((v ? Math.max(r.y0, Y0) : Math.max(r.x0, X0)) / 2.4) * 2.4; a < (v ? Math.min(r.y1, Y1) : Math.min(r.x1, X1)); a += 2.4) {
+        if (v) ctx.fillRect(r.x0, a, r.x1 - r.x0, 0.12); else ctx.fillRect(a, r.y0, 0.12, r.y1 - r.y0);
+      }
     }
-    // Where it crosses the river, the river (the highway bridges it on its own).
-    if (r && w.axis === 'v') rect(x0, r.y0, x1, r.y1, WATER);
   }
-  // Roads (trails: packed dirt). Highway decks and ramps are drawn in 3D (render/highways.ts).
+  // Roads (trails: packed dirt).
   for (const s of city.segs) {
-    if (s.way !== undefined) continue;
     const hw = s.width / 2;
     const x0 = Math.min(s.x0, s.x1) - (s.axis === 'v' ? hw : 0), x1 = Math.max(s.x0, s.x1) + (s.axis === 'v' ? hw : 0);
     const y0 = Math.min(s.y0, s.y1) - (s.axis === 'h' ? hw : 0), y1 = Math.max(s.y0, s.y1) + (s.axis === 'h' ? hw : 0);
@@ -92,10 +86,10 @@ export function paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCan
     }
   }
   for (const n of city.nodes) {
-    if (n.level !== undefined || !inView(n.x - n.wv, n.y - n.wh, n.x + n.wv, n.y + n.wh)) continue;
+    if (!inView(n.x - n.wv, n.y - n.wh, n.x + n.wv, n.y + n.wh)) continue;
     rect(n.x - n.wv / 2, n.y - n.wh / 2, n.x + n.wv / 2, n.y + n.wh / 2, !WORLD.modern || n.segs.every((si) => city.segs[si].trail) ? TRAIL() : ASPHALT);
   }
-  if (WORLD.modern) for (const s of city.segs) if (!s.trail && s.way === undefined) roadWear(ctx, s, inView);
+  if (WORLD.modern) for (const s of city.segs) if (!s.trail) roadWear(ctx, s, inView);
 
   // Blocks and lots.
   for (const b of city.blocks) {
@@ -129,10 +123,6 @@ export function paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCan
   ctx.fillRect(0, 0, size, size);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = 'source-over';
-  // A highway's trench is open to the sky: cut out of the ground (the chunk's material drops
-  // see-through pixels, render/ground.ts).
-  ctx.setTransform(PX, 0, 0, PX, -X0 * PX, -Y0 * PX);
-  for (const w of city.ways) for (const h of trenchHoles(w)) if (inView(h.x0, h.y0, h.x1, h.y1)) ctx.clearRect(h.x0, h.y0, h.x1 - h.x0, h.y1 - h.y0);
 }
 
 /** Deterministic per-segment asphalt wear: patches, oil drips down the lanes, manholes. */
@@ -192,7 +182,7 @@ function paintMarkings(ctx: CanvasRenderingContext2D, map: CityMap, inView: (a: 
   const city = map.city;
   ctx.lineCap = 'butt';
   for (const s of city.segs) {
-    if (s.trail || s.way !== undefined) continue; // dirt: no paint; highways have their own
+    if (s.trail) continue; // dirt: no paint
     const A = city.nodes[s.a], B = city.nodes[s.b];
     const hw = s.width / 2;
     if (!inView(Math.min(s.x0, s.x1) - hw, Math.min(s.y0, s.y1) - hw, Math.max(s.x0, s.x1) + hw, Math.max(s.y0, s.y1) + hw)) continue;
@@ -210,8 +200,6 @@ function paintMarkings(ctx: CanvasRenderingContext2D, map: CityMap, inView: (a: 
       line(0.2, LINE_Y, 0.15, []);
       line(-LANE_W, LINE_W, 0.15, [3, 6]);
       line(LANE_W, LINE_W, 0.15, [3, 6]);
-      // Under a highway: edge lines between the through lanes and the ramp lanes outside them.
-      if (s.width >= AVENUE_W - 0.1) { line(-2 * LANE_W, LINE_W, 0.15, []); line(2 * LANE_W, LINE_W, 0.15, []); }
     } else {
       line(0, LINE_Y, 0.15, [3, 4]);
       if (s.parking) { line(-LANE_W, 'rgba(232,230,223,0.5)', 0.12, []); line(LANE_W, 'rgba(232,230,223,0.5)', 0.12, []); }

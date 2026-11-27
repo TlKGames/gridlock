@@ -4,8 +4,9 @@
 // to play and where the others sit. Worked out from the city alone (its own Rng), after the
 // interiors, so server and clients agree; the city's other generation is untouched.
 import type { Rect } from '../math';
-import { FACTIONS, FRIENDS, GANGS, TABLES, VENUES, ZONES } from '../packs';
+import { FACTIONS, FRIENDS, GANGS, PROPERTIES, TABLES, VENUES, ZONES } from '../packs';
 import type { GameKind } from '../packs/types';
+export type { GameKind };
 import { Rng } from '../rng';
 import type { City } from './cityTypes';
 import { turfGang } from './gangTurf';
@@ -33,6 +34,41 @@ export interface TableSpot {
 }
 
 export const POKER = new Set<GameKind>(['holdem', 'draw', 'stud']);
+
+/** A place to play cards, for the maps: one per walk-in place's house tables (a saloon, a casino's
+ *  floor), gang back room or friend's yard, with the games played there. `pinned`: the place has
+ *  its own map pin already (a casino's service icon, a saloon's property icon) that lists them. */
+export interface CardVenue {
+  key: string;
+  x: number;
+  y: number;
+  name: string;
+  games: string[];
+  host: TableSpot['host'];
+  gang?: string;
+  friend?: string;
+  pinned: boolean;
+}
+
+export function cardVenues(city: City): CardVenue[] {
+  const by = new Map<string, CardVenue>();
+  for (const t of city.tables) {
+    const it = t.interior !== undefined ? city.interiors[t.interior] : undefined;
+    // A room's house tables are one place; a back-room game (even in a saloon) is its own.
+    const key = it && t.host === 'house' ? `room:${t.interior}` : `table:${t.id}`;
+    let v = by.get(key);
+    if (!v) {
+      const at = it ? it.place : t.at;
+      const name = t.host === 'house' ? (it?.place.name ?? t.name) : t.name;
+      const pinned = !!it && t.host === 'house' && (!it.property || !!PROPERTIES[it.place.spec]?.icon);
+      v = { key, x: at.x, y: at.y, name, games: [], host: t.host, ...(t.gang ? { gang: t.gang } : {}), ...(t.friend ? { friend: t.friend } : {}), pinned };
+      by.set(key, v);
+    }
+    const g = TABLES[t.spec].name;
+    if (!v.games.includes(g)) v.games.push(g);
+  }
+  return [...by.values()];
+}
 const isPoker = (spec: number) => POKER.has(TABLES[spec].game);
 const tableIndex = (id: string) => TABLES.findIndex((t) => t.id === id);
 

@@ -1,4 +1,4 @@
-// The vehicle and weapon models built in Blender (art/build.py), loaded once at startup. Each model
+// The vehicle, weapon and furniture models built in Blender (art/build.py), loaded once at startup. Each model
 // is a node named after its game id (userData.model) holding a static mesh and any moving parts
 // (userData.anim: rotor, tailrotor, turret) whose origin is their pivot. Materials say how they're
 // drawn: vehicles by role (userData.role: paint, fixed, shiny, head, tail, siren_red, siren_blue),
@@ -9,6 +9,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import dracoWasm from 'three/examples/jsm/libs/draco/gltf/draco_decoder.wasm?url';
 import dracoWrapper from 'three/examples/jsm/libs/draco/gltf/draco_wasm_wrapper.js?url';
 import { ASSETS } from '../assets';
+import furnitureGlb from '../models/furniture.glb?url';
 
 /** One material's worth of a model: geometry in the model's own space (metres, x forward, y up). */
 export interface ModelPart { role: string; material: string; color: THREE.Color; geometry: THREE.BufferGeometry }
@@ -18,9 +19,12 @@ export interface Model { parts: ModelPart[]; anim: ModelAnim[] }
 
 const vehicles = new Map<string, Model>();
 const weapons = new Map<string, Model>();
+const furniture = new Map<string, Model>();
 
 export const vehicleModel = (id: string): Model | undefined => vehicles.get(id);
 export const weaponGlb = (id: string): Model | undefined => weapons.get(id);
+/** Casino and card-room furniture (art/furniture.py), the same in every universe. */
+export const furnitureModel = (id: string): Model | undefined => furniture.get(id);
 
 /** Draco's decoder ships with three; Vite gives its two files hashed URLs, so look them up by name. */
 function draco(): DRACOLoader {
@@ -76,5 +80,6 @@ export async function loadModels(): Promise<void> {
   await Promise.all([
     ASSETS.vehiclesGlb ? one(ASSETS.vehiclesGlb, vehicles) : undefined,
     ASSETS.weaponsGlb ? one(ASSETS.weaponsGlb, weapons) : undefined,
+    one(furnitureGlb, furniture),
   ]);
 }

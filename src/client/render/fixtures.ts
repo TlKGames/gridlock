@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { FIXTURES } from '../../shared/packs';
 import type { FixturePart, FixtureSpec } from '../../shared/packs/types';
 import type { City } from '../../shared/world/cityTypes';
+import { groundUnder } from '../../shared/world/terrain';
 import { Batch, UNIT } from './instancing';
 
 const shapeGeo = (s: FixturePart['shape']): THREE.BufferGeometry => {
@@ -60,15 +61,17 @@ export class FixturesView {
       const items: Spinner[] = [];
       for (const f of placed) {
         const rot = -f.turn * Math.PI / 2;
-        fixedB?.add(f.x, 0, f.y, 1, 1, 1, '#ffffff', rot);
-        bodyB?.add(f.x, 0, f.y, 1, 1, 1, f.color, rot);
+        // Out on a hillside, footed on the lowest ground under it (world/terrain.ts).
+        const z = groundUnder(f.x, f.y, Math.min(spec.size[0], spec.size[1]) / 2);
+        fixedB?.add(f.x, z, f.y, 1, 1, 1, '#ffffff', rot);
+        bodyB?.add(f.x, z, f.y, 1, 1, 1, f.color, rot);
         if (spin.length) {
           // The wheel's hub in the world: its first part's centre, turned with the fixture. All its
           // spin parts are built round that one centre (blades crossing at the hub).
           const h = spin[0];
           const lx = ((h.x[0] + h.x[1]) / 2) * spec.size[0], lz = ((h.y[0] + h.y[1]) / 2) * spec.size[1];
           const ct = Math.cos(f.turn * Math.PI / 2), st = Math.sin(f.turn * Math.PI / 2);
-          items.push({ x: f.x + lx * ct - lz * st, y: ((h.z[0] + h.z[1]) / 2) * spec.height, z: f.y + lx * st + lz * ct, rot, phase: (f.x * 0.37 + f.y * 0.11) % 6.28 });
+          items.push({ x: f.x + lx * ct - lz * st, y: z + ((h.z[0] + h.z[1]) / 2) * spec.height, z: f.y + lx * st + lz * ct, rot, phase: (f.x * 0.37 + f.y * 0.11) % 6.28 });
         }
       }
       fixedB?.build(scene);

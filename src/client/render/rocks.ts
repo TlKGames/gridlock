@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { Rng } from '../../shared/rng';
 import type { City } from '../../shared/world/cityTypes';
+import { groundAt, groundUnder } from '../../shared/world/terrain';
 import { Batch } from './instancing';
 
 /** A mesa column's profile, bottom to top: [height 0..1, radius, brightness (the layers)]. */
@@ -79,7 +80,9 @@ export function buildRocks(scene: THREE.Scene, city: City): void {
     // Turned by where it stands, so neighbours made from one shape don't line up.
     const rot = ((r.x * 12.9898 + r.y * 78.233) % 1) * Math.PI * 2;
     const s = shapes[r.v % shapes.length];
-    (r.mesa ? s.mesa : s.lump).add(r.x, 0, r.y, r.r, r.h, r.r, r.color, rot);
+    // Footed on the lowest ground under it (world/terrain.ts), its height above that.
+    const z = groundUnder(r.x, r.y, r.r);
+    (r.mesa ? s.mesa : s.lump).add(r.x, z, r.y, r.r, r.h + groundAt(r.x, r.y) - z, r.r, r.color, rot);
   }
   for (const s of shapes) { s.mesa.build(scene); s.lump.build(scene); }
 }

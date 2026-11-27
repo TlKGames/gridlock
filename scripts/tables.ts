@@ -97,6 +97,13 @@ check(view() === null && msgs.slice(before).some((m) => m.text?.includes('invite
 pl.respect[gt.gang!] = RULES.cardInviteRespect + 5;
 ticks(70);
 check(msgs.some((m) => m.t === 'text' && m.body?.includes('game in the back')), 'respect enough, and the gang texts you an invite');
+check(msgs.some((m) => m.t === 'friends' && (m as { games?: string[] }).games?.includes(gt.gang!)), 'and their game goes on your map');
+{
+  const { cardVenues } = await import('../src/shared/world/tables');
+  const vs = cardVenues(w.city);
+  check(vs.some((v) => v.pinned && v.games.length >= 5) && vs.some((v) => v.host === 'gang') && vs.some((v) => v.host === 'friend'),
+    `card venues for the map: ${vs.length} (${vs.map((v) => `${v.name}: ${v.games.join('/')}`).slice(0, 3).join('; ')}...)`);
+}
 send({ op: 'sit', table: gt.id, n: 20000 }); ticks(2);
 check(!!view()?.poker, 'invited, you sit down at their game');
 send({ op: 'leave' }); ticks(1);

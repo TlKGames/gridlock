@@ -127,7 +127,7 @@ at an angle, a raised road's edge, a bridge hump. Today car physics is flat (alt
   launch from sloped surfaces and hard hits, flight that keeps its heading and spin, and landings
   that hurt in proportion to the drop (damage, bounce, a lost wheel's worth of grip).
 - I2. Things to launch off: ramps and jump spots as city props (packs: shapes and where they go),
-  loading docks, parked trucks with lowered tailgates, the highway's raised sections (J).
+  loading docks, parked trucks with lowered tailgates.
 - I3. The view and sound: shadow left on the ground under a car in the air, the camera pulling out
   with height, a landing thump; other players see it (alt in the snapshot, as helicopters do).
 
@@ -137,26 +137,17 @@ roll bar; `crushes` like the tank (a sedan it rams is wrecked, it takes ~2%). So
 now and then parked in industrial lots. `npx tsx scripts/monster.ts`. Still to come with I: big
 launches and surviving landings, the body bouncing on its suspension.
 
-## J. Highways (asked 2026-11-26; done)
-Two highways on their own corridors through Bayhaven (WorldSpec.highways; world/waygen.ts,
-world/ways.ts, render/highways.ts): an east-west one and a north-south one that climbs to 11 m over
-it, and one rare stretch sunk in a trench (cross streets bridge it, 12% dives, 4.8 m deep). A
-corridor replaces a road line (AVENUE_W wide, grass verge, no street along it): the user's rule is
-that highways don't follow roads, the cross streets pass under them. Interchanges are diamonds at
-cross streets: each way an exit that peels off the deck, comes down beside it and ends at a
-signalled junction on the cross street, and an on-ramp that starts there and merges in; the ends
-are half diamonds. A deck lives on
-its own strip off the map (world/levels.ts WAY0+), so collision, bullets and the spatial hash keep
-it apart; past the switch on a ramp you're moved between street and strip, and drawing maps it back
-over the avenue at the deck's height (heightAt), tilted on the ramps. Traffic spawns on the decks,
-AI takes ramps (one way, no U-turns across the median), routes prefer highways, police and on-foot
-AI follow you up and down. Standing under a deck, it thins out over you. `npx tsx scripts/highways.ts`.
+## J. Highways (asked 2026-11-26; removed)
+Built, reworked three times, and taken out at the user's word: the user didn't want them. The
+engine has no highway code any more. Lessons, if they ever come back: never on a street line; a
+city takes the land out of its blocks; level on the ground, bridging only main streets.
 
 ## K. Trains (asked 2026-11-26; Bayhaven done, Redrock nouns with the Old West session)
-A railway along one road line (WorldSpec.railway: RailSpec; world/railgen.ts, server
-systems/trains.ts, render/railway.ts). 'elevated' (Bayhaven's L): a viaduct over a north-south
-street on its own way strip, columns at the kerbs, climbing over the highway it crosses; stations
-mid-block every few blocks with side platforms, canopies and named stair towers on the sidewalks.
+A railway along one line (WorldSpec.railway: RailSpec; world/railgen.ts, server
+systems/trains.ts, render/railway.ts). 'elevated' (Bayhaven's L): a viaduct on its own corridor
+through the middle of the blocks (world/corridors.ts: a line with no street, the blocks backing onto
+it, an alley under the viaduct), on its own way strip, its columns in that strip; stations
+mid-block every few blocks with side platforms, canopies and named stair towers in the alley.
 'grade' (meant for Redrock): track on the ground beside (or down) a road, low platforms, crossbucks.
 Each train runs its own track end to end and back, stopping at every station. Press Enter at a
 stair tower's door to take the next train (you wait there); Enter at a station gets you off by the

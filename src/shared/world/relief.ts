@@ -49,6 +49,21 @@ export function relief(seed: number, x: number, y: number): number {
   return h < 0 ? 0 : h > 1 ? 1 : h;
 }
 
+/**
+ * The broad swell of the land at (x, y), about 0..1: only the long rises and hills of `relief`
+ * (no knolls, ridges or washes, which are finer than the ground's height grid can carry), for the
+ * ground's real height (world/terrainGen.ts); the fine shape stays painted.
+ */
+export function swell(seed: number, x: number, y: number): number {
+  let h = 0, w = 0;
+  for (let k = 0; k < 3; k++) {
+    const [size, wk] = OCTAVES[k];
+    h += vnoise(x / size, y / size, seed + k * 101) * wk;
+    w += wk;
+  }
+  return h / w;
+}
+
 /** A gentle wobble (m) for blending zones into each other along wandering edges, not ruled lines. */
 export function warp(seed: number, x: number, y: number, amp: number): [number, number] {
   return [(vnoise(x / 90, y / 90, seed + 211) - 0.5) * 2 * amp, (vnoise(x / 90, y / 90, seed + 419) - 0.5) * 2 * amp];

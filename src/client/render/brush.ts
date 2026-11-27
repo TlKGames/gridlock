@@ -7,6 +7,7 @@ import { Rng } from '../../shared/rng';
 import type { CityMap } from '../../shared/world/city';
 import type { Rock } from '../../shared/world/cityTypes';
 import { relief } from '../../shared/world/relief';
+import { groundAt } from '../../shared/world/terrain';
 import { Batch } from './instancing';
 
 /** Scatter cell (m): each draws its own bushes from its own seed. */
@@ -71,8 +72,10 @@ export function buildBrush(scene: THREE.Scene, map: CityMap, X0: number, Y0: num
         const x = cx + rng.next() * CELL, y = cy + rng.next() * CELL;
         const s = rng.range(b.size[0], b.size[1]), color = rng.pick(b.colors), rot = rng.next() * 6.28;
         if (map.onRoad(x, y) || map.isWater(x, y)) continue;
+        // Not on a cliff face (world/terrain.ts).
+        if (Math.abs(groundAt(x + 0.6, y) - groundAt(x - 0.6, y)) + Math.abs(groundAt(x, y + 0.6) - groundAt(x, y - 0.6)) > 1.2) continue;
         if (rocksNear(map, x, y).some((r) => (r.x - x) ** 2 + (r.y - y) ** 2 < (r.r + s * 0.5) ** 2)) continue;
-        batch.add(x, 0, y, s, s * rng.range(0.45, 0.7), s * rng.range(0.8, 1.1), color, rot);
+        batch.add(x, groundAt(x, y) - 0.05, y, s, s * rng.range(0.45, 0.7), s * rng.range(0.8, 1.1), color, rot);
       }
     }
   }

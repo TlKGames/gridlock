@@ -17,7 +17,7 @@ import { blockBy, obbVsObb } from '../src/shared/sim/dynamic';
 let failures = 0;
 const check = (ok: boolean, what: string) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) failures++; };
 const DT = 1 / 30, DEG = Math.PI / 180;
-const open = { resolveObb: () => null } as unknown as StaticWorld; // open ground, nothing to hit
+const open = { resolveObb: () => null, gradeAt: () => 0, cliff: () => null } as unknown as StaticWorld; // open level ground, nothing to hit
 const NORTH = -Math.PI / 2, SOUTH = Math.PI / 2;
 
 /** A stand-in for the real input: held actions (by id), the pad's sticks and triggers. */

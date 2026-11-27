@@ -366,6 +366,9 @@ export interface TableSpec {
   caught?: 'shoot' | 'throwOut';
   /** What the table is drawn as: a card or dice table, or a slot machine. */
   prop?: 'table' | 'slots';
+  /** Its furniture model (art/furniture.py: poker_oval, blackjack, blackjack_wood, roulette, craps,
+   *  slots, card_table, faro, dice_table, folding); by default the plain one for its game. */
+  model?: string;
 }
 
 /** Where tables are (Universe.venues): every walk-in place of a layout (a casino's floor, a
@@ -454,6 +457,10 @@ export interface PropertySpec {
   interior?: InteriorLayout;    // walk in: the ground floor is laid out like this
   /** The counter can be held up. Owned by another player, a hold-up takes from its safe instead. */
   robbery?: RobberySpec;
+  /** Its own pin on the maps instead of the plain property marker (with its own legend toggle,
+   *  `label`): a colour and a glyph, a character or one of the drawn ones (hud/mapGlyphs.ts:
+   *  'mug'). Hovering it on the big map also lists the games its tables deal. */
+  icon?: { color: string; glyph: string; label: string };
 }
 
 export interface Squad { vehicle: string; crew: string[] }
@@ -500,15 +507,16 @@ export interface WorldSpec {
    *  hydrants, bins, shelters), rooftop machinery (AC units, tanks, vents, solar, helipads,
    *  antennas). Not modern: every road is dirt, and none of that. */
   modern: boolean;
-  /** Highways on decks over avenues (world/waygen.ts): how many (the first runs east-west, the
-   *  second north-south), and how many stretches of them may run sunken in a trench instead. */
-  highways?: { count: number; sunken: number };
   /** A railway (world/railgen.ts, systems/trains.ts). */
   railway?: RailSpec;
   /** How large people are drawn against life (default 1.55: larger than life, so they read from
    *  the street camera next to cars). Riders are always about 1.1x, to sit a real-size saddle; a
    *  world of real-size horses draws people on foot at the same size. Looks only, not hit boxes. */
   pedScale?: number;
+  /** Real hills: open country's ground rises and falls by its zone's WildSpec.relief times `scale`
+   *  (world/terrain.ts), with its zones' mesas and gorges; towns, water and the railway stay level.
+   *  Without it the world is flat. */
+  terrain?: { scale: number };
 }
 
 /** A railway along one road line. 'elevated': on a viaduct over the street (a city's L), on its own
@@ -517,8 +525,7 @@ export interface WorldSpec {
  *  a train comes gets hit. */
 export interface RailSpec {
   style: 'elevated' | 'grade';
-  /** The line it follows: 'h' east-west, 'v' north-south, nearest this fraction across the map
-   *  (never a highway's avenue). */
+  /** The line it follows: 'h' east-west, 'v' north-south, nearest this fraction across the map. */
   axis: 'h' | 'v';
   at: number;
   offset?: number;
@@ -552,9 +559,10 @@ export interface WildSpec {
   ground: string[];
   /** The colour of trails (dirt roads) through it. */
   trail: string;
-  /** How hilly it is (m from wash bottom to ridge top; shading only, movement stays flat; world/
-   *  relief.ts), the colour down in the washes and up on the ridges, and the rock layers that show
-   *  in bands on its steeper slopes. Rock formations stand on the high ground. */
+  /** How hilly it is (m from wash bottom to ridge top, as painted; world/relief.ts; the ground's
+   *  real rise is this times WorldSpec.terrain.scale), the colour down in the washes and up on the
+   *  ridges, and the rock layers that show in bands on its steeper slopes. Rock formations stand on
+   *  the high ground. */
   relief?: number;
   low?: string;
   high?: string;
@@ -563,6 +571,14 @@ export interface WildSpec {
    *  colours, this size (m across); it grows thickest down in the washes. */
   boulders?: number;
   brush?: { density: number; colors: string[]; size: [number, number] };
+  /** Real landforms (with WorldSpec.terrain; world/terrainGen.ts). Plateaus: flat-topped high
+   *  ground `height` m up behind sheer cliffs, over about `cover` of the land (0..1); the broad ones
+   *  rise in a second tier, and here and there a slope leads up. Kept back from the trails. */
+  mesas?: { cover: number; height: number };
+  /** Gorges: winding canyons `depth` m deep and `width` m across at the rim (a range), sheer-walled
+   *  with a ledge part way down, over about `cover` of the land; `river`: water along the floor.
+   *  A trail crosses one on a timber trestle. */
+  gorges?: { cover: number; depth: number; width: [number, number]; river?: boolean };
 }
 
 /** A radio station: its folder under the universe's `<contentDir>/radio/`, the name players see,

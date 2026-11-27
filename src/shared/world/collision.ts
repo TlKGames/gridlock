@@ -9,12 +9,12 @@ import { gangSpots } from './gangSpots';
 import { WORLD_X } from './levels';
 import { KIND, massesFor } from './massing';
 import { wayCollision } from './ways';
+import { type Box2, type Hit, type RayHit, obbVsAabb, obbVsCircle, rayAabb, rayCircle } from './shapes';
+import { cliff, grade, groundZ, type Terrain, terrainHit } from './terrain';
 
-/** `gate`: a box that can open (a vault door: its interior's index); open gates are passed through. */
-export interface Box2 { x0: number; y0: number; x1: number; y1: number; h: number; gate?: number }
+/** `gate` on a Box2: a box that can open (a vault door: its interior's index); open gates are passed through. */
+export { type Box2, type Hit, type RayHit, obbVsAabb, obbVsCircle, rayAabb, rayCircle } from './shapes';
 export interface Circle2 { x: number; y: number; r: number; h: number }
-export interface Hit { nx: number; ny: number; depth: number }
-export interface RayHit { t: number; nx: number; ny: number }
 
 const CELL = 24;
 // The grid covers the map and, east of it, the strips upper floors live in (world/levels.ts).
@@ -34,8 +34,11 @@ export class StaticWorld {
   private stamp: Uint32Array;
   private stampC: Uint32Array;
   private q = 1;
+  /** The ground's height (world/terrain.ts); absent in a flat world. */
+  readonly terrain: Terrain | undefined;
 
   constructor(city: City) {
+    this.terrain = city.terrain;
     const r = city.riverRow;
     if (r >= 0) {
       this.riverY0 = city.ys[r].pos + city.ys[r].width / 2;
@@ -77,7 +80,7 @@ export class StaticWorld {
       else if (spec.solid === 'ring') for (const s of ringSides(f)) this.addBox({ ...s, h: Math.min(h, 1.6) });
       else if (typeof spec.solid === 'number') this.addCircle({ x: f.x, y: f.y, r: spec.solid, h });
     }
-    // Highways (world/ways.ts): ramp walls and deck columns on the street, barriers on their strips.
+    // An elevated railway (world/ways.ts): its columns and stair towers on the street.
     const ways = wayCollision(city, (x, y) => this.boatWater(x, y));
     for (const b of ways.boxes) this.addBox(b);
     for (const c of ways.circles) this.addCircle(c);
@@ -111,6 +114,12 @@ export class StaticWorld {
     if (y > this.riverY0 && y < this.riverY1) return true;
     return this.ponds.some((p) => x > p.x0 && x < p.x1 && y > p.y0 && y < p.y1);
   }
+
+  /** The ground's height at a point, and its rise per metre heading along (dx, dy). */
+  groundAt(x: number, y: number): number { return groundZ(this.terrain, x, y); }
+  gradeAt(x: number, y: number, dx: number, dy: number): number { return grade(this.terrain, x, y, dx, dy); }
+  /** Holds a body that moved from (px, py) back from a cliff (world/terrain.ts); the push-back normal. */
+  cliff(b: { x: number; y: number }, px: number, py: number): { nx: number; ny: number } | null { return cliff(this.terrain, b, px, py); }
 
   private roofs: (Box2 & { bi: number })[] = [];
   private roofCells: number[][] = Array.from({ length: N * N }, () => []);
@@ -240,8 +249,17 @@ export class StaticWorld {
     return worst;
   }
 
-  /** First static hit along a segment at height z. t is the fraction along the segment. */
+  /** First static hit along a segment at height z above the ground at each end (t: the fraction
+   *  along it): a box or circle taller than z, or a rise of ground between the ends. */
   raycast(x0: number, y0: number, x1: number, y1: number, z = 1.2): RayHit | null {
+    const hit = this.raycastFlat(x0, y0, x1, y1, z);
+    const g = terrainHit(this.terrain, x0, y0, x1, y1, z, hit ? hit.t : 1);
+    if (g === null) return hit;
+    const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+    return { t: g, nx: -(x1 - x0) / len, ny: -(y1 - y0) / len };
+  }
+
+  private raycastFlat(x0: number, y0: number, x1: number, y1: number, z: number): RayHit | null {
     const dx = x1 - x0, dy = y1 - y0;
     const out: { best: RayHit | null } = { best: null };
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / CELL));
@@ -261,71 +279,4 @@ export class StaticWorld {
     }
     return out.best;
   }
-}
-
-/** SAT between an OBB and an AABB; returns the minimum translation for the OBB. */
-export function obbVsAabb(x: number, y: number, c: number, s: number, hl: number, hw: number, b: Box2): Hit | null {
-  const bx = (b.x0 + b.x1) / 2, by = (b.y0 + b.y1) / 2, bhx = (b.x1 - b.x0) / 2, bhy = (b.y1 - b.y0) / 2;
-  const dx = x - bx, dy = y - by;
-  const axes: [number, number][] = [[1, 0], [0, 1], [c, s], [-s, c]];
-  let best = Infinity, nx = 0, ny = 0;
-  for (const [ax, ay] of axes) {
-    const ra = hl * Math.abs(c * ax + s * ay) + hw * Math.abs(-s * ax + c * ay);
-    const rb = bhx * Math.abs(ax) + bhy * Math.abs(ay);
-    const d = dx * ax + dy * ay;
-    const o = ra + rb - Math.abs(d);
-    if (o <= 0) return null;
-    if (o < best) { best = o; const sg = d < 0 ? -1 : 1; nx = ax * sg; ny = ay * sg; }
-  }
-  return { nx, ny, depth: best };
-}
-
-export function obbVsCircle(x: number, y: number, c: number, s: number, hl: number, hw: number, ci: { x: number; y: number; r: number }): Hit | null {
-  const dx = ci.x - x, dy = ci.y - y;
-  const lx = dx * c + dy * s, ly = -dx * s + dy * c;
-  const px = Math.max(-hl, Math.min(hl, lx)), py = Math.max(-hw, Math.min(hw, ly));
-  const ex = lx - px, ey = ly - py;
-  const d2 = ex * ex + ey * ey;
-  if (d2 >= ci.r * ci.r) return null;
-  if (d2 < 1e-9) {
-    // Circle centre inside the box: push along the nearest local face.
-    const ox = hl - Math.abs(lx), oy = hw - Math.abs(ly);
-    const [lnx, lny, depth] = ox < oy ? [-Math.sign(lx) || -1, 0, ox + ci.r] : [0, -Math.sign(ly) || -1, oy + ci.r];
-    return { nx: lnx * c - lny * s, ny: lnx * s + lny * c, depth };
-  }
-  const d = Math.sqrt(d2);
-  const wx = (ex * c - ey * s) / d, wy = (ex * s + ey * c) / d;
-  return { nx: -wx, ny: -wy, depth: ci.r - d };
-}
-
-export function rayAabb(x0: number, y0: number, dx: number, dy: number, b: Box2): RayHit | null {
-  let tmin = 0, tmax = 1, nx = 0, ny = 0;
-  if (Math.abs(dx) < 1e-9) { if (x0 < b.x0 || x0 > b.x1) return null; }
-  else {
-    let t1 = (b.x0 - x0) / dx, t2 = (b.x1 - x0) / dx, n = -1;
-    if (t1 > t2) { [t1, t2] = [t2, t1]; n = 1; }
-    if (t1 > tmin) { tmin = t1; nx = n; ny = 0; }
-    tmax = Math.min(tmax, t2);
-    if (tmin > tmax) return null;
-  }
-  if (Math.abs(dy) < 1e-9) { if (y0 < b.y0 || y0 > b.y1) return null; }
-  else {
-    let t1 = (b.y0 - y0) / dy, t2 = (b.y1 - y0) / dy, n = -1;
-    if (t1 > t2) { [t1, t2] = [t2, t1]; n = 1; }
-    if (t1 > tmin) { tmin = t1; nx = 0; ny = n; }
-    tmax = Math.min(tmax, t2);
-    if (tmin > tmax) return null;
-  }
-  return tmin > 0 ? { t: tmin, nx, ny } : null;
-}
-
-export function rayCircle(x0: number, y0: number, dx: number, dy: number, cx: number, cy: number, r: number): RayHit | null {
-  const fx = x0 - cx, fy = y0 - cy;
-  const a = dx * dx + dy * dy, b = 2 * (fx * dx + fy * dy), c = fx * fx + fy * fy - r * r;
-  const disc = b * b - 4 * a * c;
-  if (disc < 0 || a < 1e-12) return null;
-  const t = (-b - Math.sqrt(disc)) / (2 * a);
-  if (t < 0 || t > 1) return null;
-  const hx = x0 + dx * t - cx, hy = y0 + dy * t - cy;
-  return { t, nx: hx / r, ny: hy / r };
 }

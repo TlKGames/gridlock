@@ -11,10 +11,9 @@ export class Router {
     this.adj = city.nodes.map(() => []);
     for (const s of city.segs) {
       const a = city.nodes[s.a], b = city.nodes[s.b];
-      // Highways (world/waygen.ts) are quicker; their ramps only go one way.
-      const cost = Math.hypot(a.x - b.x, a.y - b.y) * (s.level !== undefined ? 0.6 : 1);
+      const cost = Math.hypot(a.x - b.x, a.y - b.y);
       this.adj[s.a].push({ to: s.b, cost, seg: s.id });
-      if (!s.oneway) this.adj[s.b].push({ to: s.a, cost, seg: s.id });
+      this.adj[s.b].push({ to: s.a, cost, seg: s.id });
     }
   }
 
@@ -22,7 +21,6 @@ export class Router {
   private snap(x: number, y: number): { seg: Segment; p: Pt } {
     let best = this.city.segs[0], bp: Pt = { x, y }, bd = Infinity;
     for (const s of this.city.segs) {
-      if (s.way !== undefined) continue;
       const px = Math.max(Math.min(s.x0, s.x1), Math.min(Math.max(s.x0, s.x1), x));
       const py = Math.max(Math.min(s.y0, s.y1), Math.min(Math.max(s.y0, s.y1), y));
       const d = (px - x) ** 2 + (py - y) ** 2;
@@ -39,7 +37,6 @@ export class Router {
     const goal = new Map<number, number>([[e.seg.a, dist(nodes[e.seg.a], e.p)], [e.seg.b, dist(nodes[e.seg.b], e.p)]]);
     const g = new Map<number, number>();
     const prev = new Map<number, number>();
-    const via = new Map<number, number>();
     const open = new Heap();
     for (const n of [s.seg.a, s.seg.b]) {
       const c = dist(nodes[n], s.p);
@@ -54,23 +51,17 @@ export class Router {
       const gn = g.get(n)!;
       const tail = goal.get(n);
       if (tail !== undefined && gn + tail < endCost) { endCost = gn + tail; end = n; }
-      for (const { to: m, cost, seg } of this.adj[n]) {
+      for (const { to: m, cost } of this.adj[n]) {
         const c = gn + cost;
         if (c >= (g.get(m) ?? Infinity)) continue;
         g.set(m, c);
         prev.set(m, n);
-        via.set(m, seg);
-        open.push(m, c + dist(nodes[m], e.p) * 0.6);
+        open.push(m, c + dist(nodes[m], e.p));
       }
     }
     if (end < 0) return [];
-    // Back from the end, with each ramp's own lane between its two ends.
     const path: Pt[] = [];
-    for (let n = end; n >= 0; n = prev.get(n)!) {
-      path.push({ x: nodes[n].x, y: nodes[n].y });
-      const lane = via.has(n) ? this.city.segs[via.get(n)!].path : undefined;
-      if (lane) for (let k = lane.length - 1; k >= 0; k--) path.push(lane[k]);
-    }
+    for (let n = end; n >= 0; n = prev.get(n)!) path.push({ x: nodes[n].x, y: nodes[n].y });
     return [from, s.p, ...path.reverse(), e.p, to];
   }
 }

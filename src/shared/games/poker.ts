@@ -39,6 +39,8 @@ export interface PokerSeat {
   out: boolean;
   /** Draw: how many it threw in (shown to the table). */
   drew?: number;
+  /** What it last did, as the table shows it ("Raise to 400", "Fold", "SB"). */
+  last?: string;
 }
 
 export interface PokerTable {
@@ -69,6 +71,24 @@ export type PokerAction =
   | { kind: 'draw'; discard: number[] };
 
 export const pot = (t: PokerTable): number => t.seats.reduce((a, s) => a + s.total, 0);
+
+/** The pot as the table shows it: the main pot, then a side pot for each all-in short of the
+ *  rest (consecutive layers with the same players in them are one pot). */
+export function pots(t: PokerTable): number[] {
+  // A pot splits only where someone still in is all in for less than the rest.
+  const top = Math.max(0, ...t.seats.map((s) => s.total));
+  const levels = [...new Set([...t.seats.filter((s) => s.allIn && !s.folded && !s.out).map((s) => s.total), top])].filter((x) => x > 0).sort((a, b) => a - b);
+  const out: { amount: number; who: string }[] = [];
+  let prev = 0;
+  for (const lv of levels) {
+    const amount = t.seats.reduce((a, s) => a + Math.max(0, Math.min(s.total, lv) - prev), 0);
+    const who = t.seats.map((s, i) => (!s.out && !s.folded && s.total >= lv ? i : -1)).filter((i) => i >= 0).join(',');
+    prev = lv;
+    const last = out[out.length - 1];
+    if (last && (last.who === who || !who)) last.amount += amount; else out.push({ amount, who });
+  }
+  return out.map((p) => p.amount);
+}
 const live = (t: PokerTable) => t.seats.filter((s) => !s.out && !s.folded);
 const inHand = (s: PokerSeat) => !s.out && !s.folded;
 const next = (t: PokerTable, from: number, ok: (s: PokerSeat) => boolean): number => {
@@ -94,7 +114,7 @@ export function deal(t: PokerTable, rng: Rng, order?: Card[]): boolean {
   const players = t.seats.filter((s) => !s.out && s.stack > 0);
   if (players.length < 2) return false;
   for (const s of t.seats) {
-    s.cards = []; s.bet = 0; s.total = 0; s.folded = s.out || s.stack <= 0; s.allIn = false; s.acted = false; s.cheated = false; s.drew = undefined;
+    s.cards = []; s.bet = 0; s.total = 0; s.folded = s.out || s.stack <= 0; s.allIn = false; s.acted = false; s.cheated = false; s.drew = undefined; s.last = undefined;
   }
   t.dealer = next(t, t.dealer, (s) => !s.folded);
   t.deck = order ? [...order] : deck(rng);
@@ -109,6 +129,7 @@ export function deal(t: PokerTable, rng: Rng, order?: Card[]): boolean {
     const sb = heads ? t.dealer : next(t, t.dealer, inHand), bb = next(t, sb, inHand);
     putIn(t, t.seats[sb], t.blinds[0]);
     putIn(t, t.seats[bb], t.blinds[1]);
+    t.seats[sb].last = 'SB'; t.seats[bb].last = 'BB';
     t.currentBet = t.blinds[1];
     t.street = 'pre';
     t.toAct = next(t, bb, (s) => inHand(s) && !s.allIn);
@@ -143,6 +164,7 @@ export function act(t: PokerTable, i: number, a: PokerAction): string | null {
     s.cards = keep;
     s.drew = n;
     s.acted = true;
+    s.last = n ? `Draws ${n}` : 'Stands pat';
     say(t, `${s.name} ${n ? `draws ${n}` : 'stands pat'}.`);
     t.toAct = next(t, i, (q) => inHand(q) && !q.acted);
     if (t.toAct < 0) beginRound(t, 'second');
@@ -150,9 +172,14 @@ export function act(t: PokerTable, i: number, a: PokerAction): string | null {
   }
   const o = options(t, i);
   switch (a.kind) {
-    case 'fold': s.folded = true; say(t, `${s.name} folds.`); break;
-    case 'check': if (!o.canCheck) return 'You can\'t check.'; say(t, `${s.name} checks.`); break;
-    case 'call': { const c = putIn(t, s, o.toCall); say(t, c ? `${s.name} calls ${c}${s.allIn ? ', all in' : ''}.` : `${s.name} checks.`); break; }
+    case 'fold': s.folded = true; s.last = 'Fold'; say(t, `${s.name} folds.`); break;
+    case 'check': if (!o.canCheck) return 'You can\'t check.'; s.last = 'Check'; say(t, `${s.name} checks.`); break;
+    case 'call': {
+      const c = putIn(t, s, o.toCall);
+      s.last = !c ? 'Check' : s.allIn ? 'All in' : `Call ${c}`;
+      say(t, c ? `${s.name} calls ${c}${s.allIn ? ', all in' : ''}.` : `${s.name} checks.`);
+      break;
+    }
     case 'raise': {
       const to = Math.max(o.minTo, Math.min(o.maxTo, Math.round(a.to)));
       // Not enough behind to raise: it's a call (all in).
@@ -164,6 +191,7 @@ export function act(t: PokerTable, i: number, a: PokerAction): string | null {
       t.currentBet = to;
       // Everyone else has to answer it.
       for (const q of t.seats) if (q !== s) q.acted = false;
+      s.last = s.allIn ? 'All in' : opening ? `Bet ${to}` : `Raise to ${to}`;
       say(t, `${s.name} ${opening ? 'bets' : 'raises to'} ${to}${s.allIn ? ', all in' : ''}.`);
       break;
     }
@@ -185,7 +213,8 @@ function afterAction(t: PokerTable, i: number): void {
 }
 
 function beginRound(t: PokerTable, street: Street): void {
-  for (const q of t.seats) { q.bet = 0; q.acted = false; }
+  // A new betting round: the last round's actions are cleared (a fold or all-in stands).
+  for (const q of t.seats) { q.bet = 0; q.acted = false; if (q.last !== 'Fold' && q.last !== 'All in') q.last = undefined; }
   t.currentBet = 0;
   t.minRaise = t.blinds[1];
   t.street = street;
@@ -228,6 +257,7 @@ function award(t: PokerTable, uncontested: boolean): void {
   t.result = [...won.entries()].map(([seat, w]) => ({ seat, won: w, hand: uncontested ? '' : handName(scores[seat]) }));
   for (const r of t.result) {
     t.seats[r.seat].stack += r.won;
+    t.seats[r.seat].last = `Wins ${r.won}`;
     say(t, uncontested ? `${t.seats[r.seat].name} takes ${r.won}.` : `${t.seats[r.seat].name} wins ${r.won} with ${r.hand.toLowerCase()} (${t.seats[r.seat].cards.map(cardText).join(' ')}).`);
   }
   void total;

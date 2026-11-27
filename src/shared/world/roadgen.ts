@@ -6,7 +6,7 @@ import { DISTRICTS, ZONES, zoneIndex } from '../packs';
 import type { Rng } from '../rng';
 import { LAND0, LAND1, LANE_W, MAP_SIZE, PARK_W, type RoadLine, type RoadNode, type Segment } from './cityTypes';
 import { WORLD } from './worldSpec';
-import { pickWayLines } from './waygen';
+import { insertCorridors } from './corridors';
 
 const MIN_GAP = 46;
 /** A trail: one lane each way of packed dirt. */
@@ -63,7 +63,10 @@ export interface RoadLayout {
 
 export function genLayout(rng: Rng): RoadLayout {
   const { lines: xs } = genLines(rng, null);
-  const { lines: ys, riverRow } = genLines(rng, WORLD.river ? MAP_SIZE * WORLD.river.at : null);
+  const g = genLines(rng, WORLD.river ? MAP_SIZE * WORLD.river.at : null);
+  const ys = g.lines;
+  // An elevated railway's corridor through the blocks (world/corridors.ts).
+  const riverRow = insertCorridors(xs, ys, g.riverRow);
   const nx = xs.length - 1, ny = ys.length - 1;
   const cellZone = new Int16Array(nx * ny);
   const cellDistrict = new Int16Array(nx * ny);
@@ -139,10 +142,7 @@ export function genLayout(rng: Rng): RoadLayout {
   for (const i of [...bridgeLines]) {
     if (i !== 0 && i !== xs.length - 1 && bridgeLines.size > 4 && rng.chance(0.3)) bridgeLines.delete(i);
   }
-  const L: RoadLayout = { xs, ys, riverRow, cellZone, cellDistrict, clusters, cellCluster, bridgeLines };
-  // Highways' avenues are widened for their ramp lanes before any block is laid out.
-  pickWayLines(L);
-  return L;
+  return { xs, ys, riverRow, cellZone, cellDistrict, clusters, cellCluster, bridgeLines };
 }
 
 /** Builds the segment/node graph from a layout. */
@@ -177,10 +177,10 @@ export function genGraph(L: RoadLayout): { nodes: RoadNode[]; segs: Segment[]; b
   const open = (z: number) => z < 0 || isWild(z);
   const wildPair = (za: number, zb: number) => (isWild(za) || isWild(zb)) && open(za) && open(zb);
 
-  // A highway's corridor (world/waygen.ts) is a line with no street along it: the cross streets
-  // pass under the highway, and there's no avenue.
+  // A railway's corridor (world/corridors.ts) has no street along it; the streets crossing it pass
+  // under its viaduct.
   for (let j = 0; j <= ny; j++) {
-    if (ys[j].highway) continue;
+    if (ys[j].rail) continue;
     for (let i = 0; i < nx; i++) {
       const above = clusterAt(i, j - 1), below = clusterAt(i, j);
       if (above === below && above >= 0) continue;
@@ -190,7 +190,7 @@ export function genGraph(L: RoadLayout): { nodes: RoadNode[]; segs: Segment[]; b
     }
   }
   for (let i = 0; i <= nx; i++) {
-    if (xs[i].highway) continue;
+    if (xs[i].rail) continue;
     for (let j = 0; j < ny; j++) {
       if (j === riverRow) {
         if (!L.bridgeLines.has(i)) continue;

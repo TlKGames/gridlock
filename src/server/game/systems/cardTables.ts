@@ -6,8 +6,10 @@
 import { FRIENDS, PEDS, pedWith, RULES, TABLES } from '../../../shared/packs';
 import type { TableSpec } from '../../../shared/packs/types';
 import type { S2C, TableView } from '../../../shared/protocol';
-import { bjAct, bjDeal, bjStake, bjValue, type Blackjack, type Dice, type Faro, faroTurn, newBlackjack, newDice, newFaro, pullSlots, rollDice, rouletteName, spinRoulette, type RouletteBet } from '../../../shared/games/house';
-import { faceUp, options } from '../../../shared/games/poker';
+import { bjAct, bjDeal, bjStake, bjValue, type Blackjack, type Dice, type Faro, faroTurn, newBlackjack, newDice, newFaro, pullSlots, rollDice, ROULETTE_KINDS, rouletteName, spinRoulette, type RouletteBet } from '../../../shared/games/house';
+import { faceUp, options, pots } from '../../../shared/games/poker';
+import { type Craps, crapsRefund, crapsWalkAway, newCraps } from '../../../shared/games/craps';
+import { crapsOp, crapsView } from './cardCraps';
 import type { TableSpot } from '../../../shared/world/tables';
 import type { Player } from '../entities';
 import { removePed, spawnPed } from '../factory';
@@ -23,8 +25,9 @@ interface Session {
   poker?: PokerGame;
   bj?: Blackjack;
   dice?: Dice;
+  craps?: Craps;
   faro?: Faro;
-  roulette?: { last: number; history: number[] };
+  roulette?: { last: number; history: number[]; bets: [string, number, number, number][] };
   slots?: { reels: number[] | null; won: number };
   /** The dealer at a house table (a ped). */
   dealer?: number;
@@ -42,7 +45,7 @@ export class CardTables {
   /** Is anyone playing at this table? */
   inUse = (table: number): boolean => [...this.sessions.values()].some((s) => s.spot.id === table);
 
-  handle(pl: Player, m: { op: string; table?: number; n?: number; m?: number; k?: number[]; s?: string }): void {
+  handle(pl: Player, m: { op: string; table?: number; n?: number; m?: number; k?: number[]; s?: string; bets?: [string, number, number][] }): void {
     const say = (text: string) => this.w.notify('info', text, pl);
     if (m.op === 'sit') { const err = this.sit(pl, Number(m.table), Number(m.n ?? 0)); if (err) this.w.notify('warn', err, pl); return; }
     const s = this.sessions.get(pl.id);
@@ -79,9 +82,10 @@ export class CardTables {
       s.log.push(`You sit down with $${want.toLocaleString('en-US')} in chips.`);
     } else {
       if (spec.game === 'blackjack' || spec.game === 'twentyone') s.bj = newBlackjack(spec.game);
-      if (spec.game === 'craps' || spec.game === 'hazard') s.dice = newDice(spec.game);
+      if (spec.game === 'hazard') s.dice = newDice(spec.game);
+      if (spec.game === 'craps') s.craps = newCraps();
       if (spec.game === 'faro') s.faro = newFaro(w.rng);
-      if (spec.game === 'roulette') s.roulette = { last: -1, history: [] };
+      if (spec.game === 'roulette') s.roulette = { last: -1, history: [], bets: [] };
       if (spec.game === 'slots') s.slots = { reels: null, won: 0 };
       s.dealer = dealerFor(w, spot);
     }
@@ -93,6 +97,7 @@ export class CardTables {
   /** Money the player takes away if the connection ends at this instant. */
   refund(pl: Player): number {
     const s = this.sessions.get(pl.id);
+    if (s?.craps) return crapsRefund(s.craps);
     if (s?.poker) return s.poker.t.seats[0].stack;
     if (s?.faro) return [...s.faro.bets.values()].reduce((sum, bet) => sum + bet, 0);
     return s?.dice?.bet ?? 0;
@@ -101,12 +106,17 @@ export class CardTables {
   leave(pl: Player, why?: string): void {
     const s = this.sessions.get(pl.id);
     if (!s) return;
-    const chips = this.refund(pl);
+    const chips = s.craps ? 0 : this.refund(pl);
     pl.cash += chips;
     this.sessions.delete(pl.id);
     if (s.poker) {
       if (chips > 0) this.w.notify('money', `You cash out $${chips.toLocaleString('en-US')}.`, pl);
       endPoker(this.w, s.poker);
+    }
+    // Full craps settles outstanding line bets on departure. Its result includes open stakes.
+    if (s.craps) {
+      const back = crapsWalkAway(s.craps, this.w.rng);
+      if (back) this.w.earn(pl, back);
     }
     if (s.dealer) { const d = this.w.peds.get(s.dealer); if (d && !d.dead) removePed(this.w, d); }
     if (why) this.w.notify('info', why, pl);
@@ -131,14 +141,23 @@ export class CardTables {
     const g = s.poker!, t = g.t;
     const me = this.w.peds.get(pl.pid)!;
     switch (m.op) {
-      case 'fold': case 'check': case 'call': return pokerMove(g, { kind: m.op });
-      case 'raise': return pokerMove(g, { kind: 'raise', to: Number(m.n) });
-      case 'draw': return pokerMove(g, { kind: 'draw', discard: (m.k ?? []).map(Number).filter((k) => k >= 0 && k < 5) });
+      case 'fold': case 'check': case 'call': return pokerMove(this.w, g, { kind: m.op });
+      case 'raise': return pokerMove(this.w, g, { kind: 'raise', to: Number(m.n) });
+      case 'draw': return pokerMove(this.w, g, { kind: 'draw', discard: (m.k ?? []).map(Number).filter((k) => k >= 0 && k < 5) });
       case 'rebuy': {
         if (t.seats[0].stack > 0 || (t.street !== 'show' && t.street !== 'idle')) return 'Not now.';
         const [lo] = g.spec.buyIn ?? [g.spec.stakes[1] * 40];
         if (pl.cash + pl.bank < lo) return `You need $${lo.toLocaleString('en-US')}.`;
         take(pl, lo); t.seats[0].stack = lo; s.log.push(`You buy back in for $${lo.toLocaleString('en-US')}.`);
+        return null;
+      }
+      case 'topup': {
+        // Between hands, more chips up to the table's biggest buy-in.
+        if (t.street !== 'show' && t.street !== 'idle') return 'Between hands.';
+        const [, hi] = g.spec.buyIn ?? [0, g.spec.stakes[1] * 100];
+        const add = Math.min(Math.round(Number(m.n)), hi - t.seats[0].stack, pl.cash + pl.bank);
+        if (!(add > 0)) return t.seats[0].stack >= hi ? 'You\'ve got the most this table takes.' : 'Not enough money.';
+        take(pl, add); t.seats[0].stack += add; s.log.push(`You add $${add.toLocaleString('en-US')} in chips.`);
         return null;
       }
       case 'cheat': {
@@ -197,7 +216,7 @@ export class CardTables {
 
   // ---- House games --------------------------------------------------------------------------------
 
-  private houseOp(pl: Player, s: Session, m: { op: string; n?: number; m?: number; s?: string }): string | null {
+  private houseOp(pl: Player, s: Session, m: { op: string; n?: number; m?: number; s?: string; bets?: [string, number, number][] }): string | null {
     const w = this.w, spec = s.spec;
     const [lo, hi] = spec.stakes;
     const stake = (n: unknown): number | string => {
@@ -227,13 +246,33 @@ export class CardTables {
     }
     if (s.roulette) {
       if (m.op !== 'spin') return 'Not a move.';
-      const v = stake(m.n); if (typeof v === 'string') return v;
-      const bet: RouletteBet = { on: String(m.s) as RouletteBet['on'], amount: v, ...(m.s === 'number' ? { n: Math.max(0, Math.min(37, Math.round(Number(m.m)))) } : {}) };
-      const r = spinRoulette(w.rng, [bet]);
-      s.roulette.last = r.n; s.roulette.history = [r.n, ...s.roulette.history].slice(0, 12);
-      win(r.back[0]);
-      s.log.push(`${rouletteName(r.n)}. ${r.back[0] ? `You win $${(r.back[0] - v).toLocaleString('en-US')}.` : 'You lose.'}`);
+      // Every chip on the layout rides one spin: each bet within the table's limits, all of them
+      // paid for up front.
+      const list: [string, number, number][] = m.bets?.length ? m.bets.slice(0, 60) : [[String(m.s), Number(m.m ?? 0), Number(m.n)]];
+      const bets: RouletteBet[] = [];
+      for (const [kind, num, amt] of list) {
+        if (!ROULETTE_KINDS.has(kind)) return 'Not a bet on this layout.';
+        const a = Math.round(Number(amt));
+        if (!(a >= lo && a <= hi)) return `Bets here are $${lo}-$${hi.toLocaleString('en-US')} each.`;
+        bets.push({ on: kind as RouletteBet['on'], amount: a, ...(kind === 'number' ? { n: Math.max(0, Math.min(37, Math.round(Number(num)))) } : {}) });
+      }
+      const total = bets.reduce((t, b) => t + b.amount, 0);
+      if (!bets.length) return 'Put a chip down first.';
+      if (pl.cash + pl.bank < total) return 'Not enough money.';
+      take(pl, total);
+      const r = spinRoulette(w.rng, bets);
+      const back = r.back.reduce((t, b) => t + b, 0);
+      s.roulette.last = r.n; s.roulette.history = [r.n, ...s.roulette.history].slice(0, 20);
+      s.roulette.bets = bets.map((b, i) => [b.on, b.n ?? 0, b.amount, r.back[i]]);
+      win(back);
+      s.log.push(`${rouletteName(r.n)}. ${back > total ? `You win $${(back - total).toLocaleString('en-US')}.` : back === total ? 'You break even.' : back ? `You get $${back.toLocaleString('en-US')} back.` : `You lose $${total.toLocaleString('en-US')}.`}`);
       return null;
+    }
+    if (s.craps) {
+      return crapsOp(s.craps, m, {
+        stake, rng: w.rng, log: (t) => s.log.push(t), pay: win,
+        take: (n) => { if (!(n > 0) || pl.cash + pl.bank < n) return false; take(pl, n); return true; },
+      });
     }
     if (s.dice) {
       const g = s.dice;
@@ -283,19 +322,24 @@ export class CardTables {
 
   private view(s: Session): TableView {
     const spec = s.spec;
-    const v: TableView = { id: s.spot.id, name: s.spot.name, game: spec.game, stakes: spec.stakes, chips: 0, log: s.log.slice(-8) };
+    const v: TableView = { id: s.spot.id, name: s.spot.name, game: spec.game, stakes: spec.stakes, chips: 0, log: s.log.slice(-30) };
     if (s.poker) {
       const g = s.poker, t = g.t, o = t.toAct === 0 ? options(t, 0) : null;
+      const between = t.street === 'show' || t.street === 'idle';
       v.chips = t.seats[0].stack;
-      v.log = [...t.log.slice(-6), ...s.log.slice(-3)].slice(-8);
+      v.log = [...t.log.slice(-30), ...s.log.slice(-3)].slice(-30);
       v.poker = {
         street: t.street, board: t.board, pot: t.seats.reduce((a, q) => a + q.total, 0), toCall: o?.toCall ?? 0, minTo: o?.minTo ?? 0, maxTo: o?.maxTo ?? 0,
-        yourTurn: t.toAct === 0, you: 0, dealer: t.dealer, acting: t.toAct, between: t.street === 'show' || t.street === 'idle',
+        yourTurn: t.toAct === 0, you: 0, dealer: t.dealer, acting: t.toAct, between,
         seats: t.seats.map((q, k) => ({
-          name: q.name, stack: q.stack, bet: q.bet, folded: q.folded, allIn: q.allIn, out: q.out, ...(q.drew !== undefined ? { drew: q.drew } : {}),
+          name: q.name, stack: q.stack, bet: q.bet, folded: q.folded, allIn: q.allIn, out: q.out, ...(q.drew !== undefined ? { drew: q.drew } : {}), ...(q.last ? { last: q.last } : {}),
           // Your own cards; everyone's up cards; theirs at a showdown (if they're still in).
           cards: q.cards.map((c, i) => (k === 0 || faceUp(t, i) && (!q.folded || t.street !== 'show') || g.peeked.has(k) ? c : -1)),
         })),
+        pots: pots(t), big: t.variant === 'holdem' ? t.blinds[1] : t.blinds[1], result: t.result,
+        // Someone else thinking it over, or the next deal coming: how long they've got.
+        clock: (t.toAct > 0 || (between && t.seats[0].stack > 0)) && g.wait > 0 ? [g.wait, Math.max(g.wait, g.waitTotal)] : null,
+        topTo: (spec.buyIn ?? [0, spec.stakes[1] * 100])[1],
       };
       const open = cheatsOpen(g);
       if (open.length) v.cheats = open;
@@ -310,9 +354,15 @@ export class CardTables {
       };
     }
     if (s.roulette) v.roulette = s.roulette;
-    if (s.dice) v.dice = { variant: s.dice.variant, point: s.dice.point, main: s.dice.main, bet: s.dice.bet, side: s.dice.side, last: s.dice.last, said: s.dice.said };
+    if (s.dice) v.dice = { variant: s.dice.variant, point: s.dice.point, main: s.dice.main, bet: s.dice.bet, side: s.dice.side, last: s.dice.last, said: s.dice.said, history: s.dice.history };
+    if (s.craps) v.craps = crapsView(s.craps);
     if (s.slots) v.slots = s.slots;
-    if (s.faro) v.faro = { turn: s.faro.turn, bets: [...s.faro.bets], left: s.faro.box.length, said: s.faro.said };
+    if (s.faro) {
+      // The casekeeper: how many of each rank have come out of the box (four of each in a deck).
+      const left = new Array(13).fill(0);
+      for (const c of s.faro.box) left[c % 13]++;
+      v.faro = { turn: s.faro.turn, bets: [...s.faro.bets], left: s.faro.box.length, said: s.faro.said, dealt: left.map((n) => 4 - n) };
+    }
     return v;
   }
 }

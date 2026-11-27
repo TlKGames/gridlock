@@ -4,9 +4,13 @@ import { CityMap, generateCity } from '../../shared/world/city';
 import { StaticWorld } from '../../shared/world/collision';
 import { groundOf, isWayStrip } from '../../shared/world/levels';
 import { heightAt, installWays } from '../../shared/world/ways';
-import { Highways } from '../render/highways';
+import { installTerrain } from '../../shared/world/terrain';
 import { RailwayView } from '../render/railway';
-import { joinContent, tableContent, type TableSend } from '../hud/cardTable';
+import { joinScreen, tableScreen, type TableSend } from '../hud/cardTable';
+import { TableRoom } from '../hud/tableRoom';
+import { autoAct } from '../hud/pokerTable';
+import { knownVenues } from '../hud/cardMarks';
+import { type CardVenue, cardVenues } from '../../shared/world/tables';
 import { Radio } from '../audio/radio';
 import { Soundtrack } from '../audio/soundtrack';
 import { Sound } from '../audio/sound';
@@ -46,6 +50,7 @@ import { Storefronts } from '../render/storefronts';
 import { addAtms } from '../render/atms';
 import { GasStations } from '../render/gasStations';
 import { Interiors } from '../render/interiors';
+import { GameTables } from '../render/gameTables';
 import { atmsOf } from '../../shared/world/atms';
 import { Water } from '../render/water';
 import { type OwnState, type PlayerTag, WorldView } from '../render/worldView';
@@ -109,6 +114,7 @@ export class Game {
   constructor(private conn: Connection, private myId: number, private code: string, seed: number, private onLeave: () => void) {
     const city = generateCity(seed);
     installWays(city.ways);
+    installTerrain(city.terrain);
     this.map = new CityMap(city);
     const statics = this.statics = new StaticWorld(city);
     const canvas = document.getElementById('view') as HTMLCanvasElement;
@@ -147,6 +153,7 @@ export class Game {
     this.input.onNav = (c) => {
       if (this.garage.isOpen) this.garage.nav(c);
       else if (this.shop.isOpen) this.shop.nav(c);
+      else if (this.tables.isOpen) this.tables.nav(c);
       else if (this.phone.capturing || this.phone.ringingNow) this.phone.nav(c);
       else if (!this.bigMap.isOpen) this.pane.nav(c);
       else if (c === 'back') this.bigMap.close();
@@ -173,12 +180,11 @@ export class Game {
     this.buildingUniforms = meshes.uniforms;
     this.props = meshes.props;
     this.water = new Water(this.stage.scene, this.map);
-    this.highways = new Highways(this.stage.scene, city);
     new RailwayView(this.stage.scene, city, (x, y) => this.map.isWater(x, y));
     this.storefronts = new Storefronts(this.stage.scene, city);
     addAtms(this.stage.scene, atmsOf(city));
     this.gas = new GasStations(this.stage.scene, city);
-    this.interiors = new Interiors(this.stage.scene, city);
+    this.interiors = new Interiors(this.stage.scene, city, new GameTables(this.stage.scene, city).drawn);
     if (RULES.graffiti) new Graffiti(this.stage.scene, city, meshes.graffitiSpots);
     this.quality = new QualityGovernor(this.stage);
     this.quality.onAuto = (q) => this.hud.notify(`Graphics set to ${q} for a smoother frame rate (Esc to change)`, 'info');
@@ -186,22 +192,38 @@ export class Game {
   }
 
   private buildingUniforms: { uNight: { value: number } };
-  private highways: Highways;
   /** The table you're sat at, as the server shows it; friends whose number you have. */
   private tableView: TableView | null = null;
   private friends = new Set<string>();
+  /** Gangs whose back-room game you've been asked to; the card games on the maps. */
+  private gangGames = new Set<string>();
+  private cardMarks: CardVenue[] = [];
+  private allVenues: CardVenue[] | null = null;
+  private refreshCardMarks(): void {
+    this.allVenues ??= cardVenues(this.map.city);
+    this.cardMarks = knownVenues(this.allVenues, this.friends, this.gangGames);
+  }
 
-  /** A card or casino table's pane: sit down (or meet the friend whose game it is), then play.
-   *  Closing it gets you up from the table. */
+  /** A card or casino table's screen (hud/tableRoom.ts): sit down (or meet the friend whose game it
+   *  is), then play. Leaving it gets you up from the table. */
   private openTable(id: number): void {
     const spot = this.map.city.tables[id];
-    if (!spot || !this.you) return;
+    if (!spot || !this.you || this.tables.isOpen) return;
     const send: TableSend = (m) => this.conn.send({ t: 'table', ...m });
-    this.pane.open(() => (this.tableView && this.tableView.id === id
-      ? tableContent(spot, this.tableView, this.you!, send)
-      : joinContent(spot, this.you!, (k) => this.friends.has(k), send)));
-    this.pane.onClose = () => { if (this.tableView) send({ op: 'leave' }); };
+    this.input.enabled = false;
+    this.input.release();
+    this.tableSeated = false;
+    this.tables.open({
+      screen: (a) => (this.tableView && this.tableView.id === id
+        ? tableScreen(spot, this.tableView, this.you!, send, a)
+        : joinScreen(spot, this.you!, (k) => this.friends.has(k), send)),
+      leave: () => { if (this.tableView) send({ op: 'leave' }); },
+      close: () => { this.input.enabled = true; this.tableSeated = false; },
+    });
   }
+  private tables = new TableRoom();
+  /** You've sat down at the open table (so its view going away means you were put out). */
+  private tableSeated = false;
   private props: StreetProps;
   private furniture: StreetPropsView;
   private fixtures: FixturesView;
@@ -235,10 +257,11 @@ export class Game {
         if (this.bigMap.isOpen) this.bigMap.close(); else this.bigMap.open(o?.x ?? MAP_SIZE / 2, o?.y ?? MAP_SIZE / 2);
         break;
       }
-      case 'phone': if (RULES.cellPhone && !this.garage.isOpen && !this.shop.isOpen) this.phone.button(); break;
+      case 'phone': if (RULES.cellPhone && !this.garage.isOpen && !this.shop.isOpen && !this.tables.isOpen) this.phone.button(); break;
       case 'menu':
         if (this.garage.isOpen) { this.garage.leave(); return; }
         if (this.shop.isOpen) { this.shop.leave(); return; }
+        if (this.tables.isOpen) { this.tables.back(); return; }
         if (this.phone.isOpen) { this.phone.close(); return; }
         if (this.bigMap.isOpen) { this.bigMap.close(); return; }
         if (this.pane.isOpen) this.pane.close();
@@ -281,8 +304,18 @@ export class Game {
         this.storefronts.setOwners(this.owners);
         break;
       case 'profile': this.profile = m.p; break;
-      case 'table': this.tableView = m.v; this.pane.refresh(); break;
-      case 'friends': this.friends = new Set(m.list.map(([id]) => id)); this.phone.setFriends(m.list); this.pane.refresh(); break;
+      case 'table':
+        this.tableView = m.v;
+        if (m.v) this.tableSeated = true;
+        else if (this.tableSeated && this.tables.isOpen) this.tables.leave(false); // thrown out, or shot
+        // Poker: what you ticked to do when it came round to you (hud/pokerTable.ts).
+        if (m.v) autoAct(m.v, (msg) => this.conn.send({ t: 'table', ...msg }));
+        this.tables.refresh();
+        break;
+      case 'friends':
+        this.friends = new Set(m.list.map(([id]) => id)); this.gangGames = new Set(m.games ?? []);
+        this.refreshCardMarks(); this.phone.setFriends(m.list); this.tables.refresh();
+        break;
       case 'radio': this.radio.set(m.vid, m.station); break;
       case 'save': saveProgress(m.id, m.p); break;
       case 'msg':
@@ -340,7 +373,7 @@ export class Game {
     const now = performance.now();
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    this.input.pollPad(dt, this.pane.isOpen || this.bigMap.isOpen || this.garage.isOpen || this.shop.isOpen || this.phone.capturing, this.phone.ringingNow);
+    this.input.pollPad(dt, this.pane.isOpen || this.bigMap.isOpen || this.garage.isOpen || this.shop.isOpen || this.tables.isOpen || this.phone.capturing, this.phone.ringingNow);
     this.acc += dt;
     let n = 0;
     while (this.acc >= STEP && n < 4) {
@@ -360,7 +393,7 @@ export class Game {
     this.store.update();
     const own = this.ownState(this.acc / STEP);
     // Where you are over the map (upstairs, world/levels.ts: over your building, at your floor's
-    // height; on a highway, over its avenue at the deck's height: world/ways.ts).
+    // height; on a train's viaduct, over its corridor at the track's height: world/ways.ts).
     const up = own ? groundOf(own.x, own.y) : null;
     const upH = own ? heightAt(own.x, own.y) : 0;
     const disp = own && up ? { ...own, x: up.x, y: up.y } : null;
@@ -385,7 +418,6 @@ export class Game {
     if (it) this.fx.glow.put(it.x, it.y, 0.09, 3.2 + Math.sin(performance.now() / 160) * 0.7, 1, 0, 1, 0.12, 0.08, 0.7);
     this.gas.putGlows(this.fx.glow, night, vr);
     if (own && up) this.interiors.update(up.x, up.y, !own.vid, isWayStrip(up.f) ? 0 : up.f);
-    if (up) this.highways.update(up.x, up.y, up.f === 0);
     this.interiors.putGlows(this.fx.glow, night);
     this.view.carTags = this.carTags();
     this.view.sync(this.store, dt, own, this.tags(), night, vr);
@@ -484,10 +516,11 @@ export class Game {
     })];
     const it = this.itSpot();
     if (it && this.jobs.it !== this.myId) blips.push({ x: it.x, y: it.y, color: '#ff2a2a', shape: 'star' });
-    this.radar.drawRadar(ctx, 220, disp.x, disp.y, own.angle, range, this.players, this.myId, owned, hostiles, blips, marks, job.route);
+    if (!this.allVenues) this.refreshCardMarks();
+    this.radar.drawRadar(ctx, 220, disp.x, disp.y, own.angle, range, this.players, this.myId, owned, hostiles, blips, marks, job.route, this.cardMarks);
     if (this.bigMap.isOpen) {
       this.bigMap.draw({ me: { x: disp.x, y: disp.y, angle: own.angle }, players: this.players, meId: this.myId, owned, owners: this.owners,
-        blips, waypoint: wp.point, marks, jobRoute: job.route });
+        blips, waypoint: wp.point, marks, jobRoute: job.route, cards: this.cardMarks });
     }
   }
 

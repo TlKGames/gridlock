@@ -67,7 +67,7 @@ export function doorway(w: World, p: Ped, tx: number, ty: number): { x: number; 
  *  building, plus the climb, not across the off-map strips the upper floors live on. */
 export function reachDist(ax: number, ay: number, bx: number, by: number): { d: number; sameFloor: boolean } {
   const a = groundOf(ax, ay), b = groundOf(bx, by);
-  // A highway's deck (world/ways.ts) is about two floors up.
+  // A railway's viaduct (world/ways.ts) is about two floors up.
   const lvl = (f: number) => (isWayStrip(f) ? 2 : f);
   return { d: Math.hypot(a.x - b.x, a.y - b.y) + Math.abs(lvl(a.f) - lvl(b.f)) * 6, sameFloor: a.f === b.f };
 }

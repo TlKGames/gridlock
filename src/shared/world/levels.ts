@@ -8,8 +8,8 @@ export const LEVEL_BAND = 2560;
 export const FLOOR_H = 3.2;
 /** Most floors above the lobby a building gets (the collision grid is sized for them). */
 export const MAX_FLOORS = 5;
-/** After the floors come the strips raised and sunken ways live on (highways, railways: world/
- *  wayTypes.ts), one per way. */
+/** After the floors come the strips raised ways live on (an elevated railway: world/wayTypes.ts),
+ *  one per way. */
 export const WAY0 = MAX_FLOORS + 1;
 export const MAX_WAYS = 3;
 /** How far east the world reaches (the collision grid's width). */
@@ -17,7 +17,7 @@ export const WORLD_X = MAP_SIZE + LEVEL_BAND * (MAX_FLOORS + MAX_WAYS);
 
 /** Which floor a world x is on (0 = street level; WAY0 and up: a way's strip). */
 export const floorOf = (x: number): number => (x < LEVEL_BAND ? 0 : Math.floor(x / LEVEL_BAND));
-/** Is this strip a way's (a highway deck or a railway), not a building's floor? */
+/** Is this strip a way's (a railway's viaduct), not a building's floor? */
 export const isWayStrip = (f: number): boolean => f >= WAY0;
 
 /** Where a point on any floor is over the map, and which floor it's on. */

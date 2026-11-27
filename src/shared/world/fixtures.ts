@@ -104,26 +104,32 @@ function atStations(spec: FixtureSpec, si: number, lots: Lot[], stations: { x: n
   const zones = zonesOf(spec);
   for (const s of stations) {
     if (!rng.chance(spec.chance)) continue;
-    let best: Lot | null = null, bd = 45;
-    for (const lot of lots) {
-      if (!zones.has(lot.zone) || lot.use !== 'building' || !lot.building || lot.service !== undefined || lot.property !== undefined || taken.has(lot.id)) continue;
-      const d = Math.hypot((lot.rect.x0 + lot.rect.x1) / 2 - s.x, (lot.rect.y0 + lot.rect.y1) / 2 - s.y);
-      if (d < bd) { bd = d; best = lot; }
-    }
-    if (!best) continue;
-    const cx = (best.rect.x0 + best.rect.x1) / 2, cy = (best.rect.y0 + best.rect.y1) / 2;
-    // Front toward the platform: the axis it lies furthest along.
-    const dx = s.x - cx, dy = s.y - cy;
-    const turn: Fixture['turn'] = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 2) : (dy > 0 ? 1 : 3);
+    // The free building lots within a short walk of the platform, nearest first: the first it fits
+    // on, fronting the platform if it can, else turned along it.
+    const near = lots.filter((lot) => zones.has(lot.zone) && lot.use === 'building' && !!lot.building && lot.service === undefined
+      && lot.property === undefined && !taken.has(lot.id) && dist(lot, s) < 75).sort((a, b) => dist(a, s) - dist(b, s));
     const color = spec.colors?.length ? spec.colors[Math.floor(rng.next() * spec.colors.length)] : '#888888';
-    const f: Fixture = { spec: si, x: cx, y: cy, turn, color };
-    if (!inside(fixtureRect(f), inset(best.rect, 0.5))) continue;
-    delete best.building;
-    out.push(f);
-    taken.set(best.id, [fixtureRect(f)]);
-    keepClear(best.id, fixtureRect(f));
+    let placed: { lot: Lot; f: Fixture } | null = null;
+    for (const lot of near) {
+      const cx = (lot.rect.x0 + lot.rect.x1) / 2, cy = (lot.rect.y0 + lot.rect.y1) / 2;
+      // Front toward the platform: the axis it lies furthest along.
+      const dx = s.x - cx, dy = s.y - cy;
+      const front: Fixture['turn'] = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 0 : 2) : (dy > 0 ? 1 : 3);
+      for (const turn of [front, ((front + 1) % 4) as Fixture['turn'], ((front + 3) % 4) as Fixture['turn']]) {
+        const f: Fixture = { spec: si, x: cx, y: cy, turn, color };
+        if (inside(fixtureRect(f), inset(lot.rect, 0.5))) { placed = { lot, f }; break; }
+      }
+      if (placed) break;
+    }
+    if (!placed) continue;
+    delete placed.lot.building;
+    out.push(placed.f);
+    taken.set(placed.lot.id, [fixtureRect(placed.f)]);
+    keepClear(placed.lot.id, fixtureRect(placed.f));
   }
 }
+
+const dist = (lot: Lot, p: { x: number; y: number }) => Math.hypot((lot.rect.x0 + lot.rect.x1) / 2 - p.x, (lot.rect.y0 + lot.rect.y1) / 2 - p.y);
 
 /** Open country's fixtures in one area, placed with the rock: `fits`/`clear` as landforms.ts. */
 export function wildFixtures(rng: Rng, zone: number, area: Rect, fits: (r: Rect) => boolean, clear: Rect[], out: Fixture[]): void {

@@ -12,8 +12,6 @@ export interface DriveState {
   pts: { x: number; y: number; stop?: number; axis?: 'h' | 'v' }[];
   seg: number; dir: 1 | -1; lane: number;
   route: number[];          // node ids remaining (route mode)
-  /** Route mode: the points of the ramp being driven to the next node (ground coordinates). */
-  via?: { x: number; y: number }[];
   routeT: number;
   stuckT: number;
   reverseT: number;

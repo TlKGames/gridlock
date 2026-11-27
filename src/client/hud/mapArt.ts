@@ -5,9 +5,8 @@ import { fixtureRect } from '../../shared/world/fixtures';
 import type { CityMap } from '../../shared/world/city';
 import { LAND0, LAND1, MAP_SIZE } from '../../shared/world/cityTypes';
 import { turfGang } from '../../shared/world/gangTurf';
-import { DECK_HALF, MERGE, RAMP_LEN, RAMP_W, wayPoint } from '../../shared/world/wayTypes';
 
-export const MAP_COLORS = { water: '#0e2431', land: '#15181d', road: '#3a404a', arterial: '#4b525e', rock: '#3a2a22', highway: '#b8863a', rail: '#8f96a3', station: '#d8dde6' };
+export const MAP_COLORS = { water: '#0e2431', land: '#15181d', road: '#3a404a', arterial: '#4b525e', rock: '#3a2a22', rail: '#8f96a3', station: '#d8dde6' };
 
 /** Blends a hex colour toward another (t = share of `b`). */
 function mix(a: string, b: string, t: number): string {
@@ -66,26 +65,11 @@ export function bakeCityMap(map: CityMap, scale: number): HTMLCanvasElement {
   }
   // Streets on top of the land between blocks, wider and brighter for arterials.
   for (const s of city.segs) {
-    if (s.way !== undefined) continue;
     ctx.fillStyle = s.lanes > 1 ? MAP_COLORS.arterial : MAP_COLORS.road;
     const half = s.width / 2;
     const x0 = Math.min(s.x0, s.x1), x1 = Math.max(s.x0, s.x1), y0 = Math.min(s.y0, s.y1), y1 = Math.max(s.y0, s.y1);
     if (s.axis === 'h') ctx.fillRect(x0, (y0 + y1) / 2 - half, x1 - x0, half * 2);
     else ctx.fillRect((x0 + x1) / 2 - half, y0, half * 2, y1 - y0);
-  }
-  // Highways over their avenues: a bold amber band with a dark edge, the ramps peeling off it.
-  for (const w of city.ways) {
-    if (w.kind !== 'highway') continue;
-    const band = (a0: number, a1: number, l0: number, l1: number) => {
-      const p = wayPoint(w, Math.min(a0, a1), Math.min(l0, l1)), q = wayPoint(w, Math.max(a0, a1), Math.max(l0, l1));
-      ctx.fillRect(Math.min(p.x, q.x), Math.min(p.y, q.y), Math.abs(q.x - p.x), Math.abs(q.y - p.y));
-    };
-    ctx.fillStyle = '#1b1d22';
-    band(w.a0, w.a1, -DECK_HALF - 1.2, DECK_HALF + 1.2);
-    for (const r of w.ramps) band(r.foot, r.foot + r.up * (RAMP_LEN + MERGE), r.lat - RAMP_W / 2 - 0.8, r.lat + RAMP_W / 2 + 0.8);
-    ctx.fillStyle = MAP_COLORS.highway;
-    band(w.a0, w.a1, -DECK_HALF, DECK_HALF);
-    for (const r of w.ramps) band(r.foot, r.foot + r.up * (RAMP_LEN + MERGE), r.lat - RAMP_W / 2, r.lat + RAMP_W / 2);
   }
   // The railway: a dark line with cross ties, its stations as blocks.
   const rail = city.railway;

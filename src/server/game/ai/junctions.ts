@@ -21,8 +21,6 @@ function toBox(v: Vehicle, n: RoadNode): number {
  * lane it will leave by.
  */
 export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', exit: { x: number; y: number } | null): boolean {
-  // A highway's merge or exit (world/waygen.ts): no junction box, you just keep your lane.
-  if (node.level !== undefined) return true;
   if (inBox(node, v.body.x, v.body.y)) return true; // already committed: clear the box
   const mine = toBox(v, node);
   const r = Math.max(node.wv, node.wh) / 2 + 22;

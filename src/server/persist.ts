@@ -5,8 +5,10 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { join } from 'node:path';
 import { UNIVERSE } from '../shared/packs';
 
-/** Bumped when the save format changes (v2: the universe); older saves are left unread. */
-export const SAVE_VERSION = 2;
+/** Bumped when the save format changes, or the city is laid out differently so property ids move
+ *  (v2: the universe; v3: highway and railway corridors through the blocks; v4: no highways);
+ *  older saves are left unread. */
+export const SAVE_VERSION = 4;
 
 export interface SavedProfile { name?: string; cash: number; bank?: number; garage: number[]; owned: number[]; felonies?: Record<string, number>; deaths: number; respect?: Record<string, number>; met?: string[] }
 

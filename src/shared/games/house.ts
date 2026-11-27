@@ -109,7 +109,8 @@ function bjFinish(g: Blackjack, rng: Rng): void {
 
 /** American wheel: 0, 00 (37) and 1..36. */
 export const ROULETTE_REDS = new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36]);
-export type RouletteBet = { on: 'red' | 'black' | 'odd' | 'even' | 'low' | 'high' | 'dozen1' | 'dozen2' | 'dozen3' | 'number'; n?: number; amount: number };
+export type RouletteBet = { on: 'red' | 'black' | 'odd' | 'even' | 'low' | 'high' | 'dozen1' | 'dozen2' | 'dozen3' | 'col1' | 'col2' | 'col3' | 'number'; n?: number; amount: number };
+export const ROULETTE_KINDS = new Set(['red', 'black', 'odd', 'even', 'low', 'high', 'dozen1', 'dozen2', 'dozen3', 'col1', 'col2', 'col3', 'number']);
 
 export const rouletteName = (n: number): string => (n === 37 ? '00' : String(n));
 
@@ -127,6 +128,8 @@ export function spinRoulette(rng: Rng, bets: RouletteBet[]): { n: number; back: 
         case 'even': return real && n % 2 === 0 ? 2 : 0;
         case 'low': return real && n <= 18 ? 2 : 0;
         case 'high': return real && n >= 19 ? 2 : 0;
+        // Columns: the layout's three rows of twelve (1, 4, 7...; 2, 5, 8...; 3, 6, 9...), 2 to 1.
+        case 'col1': case 'col2': case 'col3': return real && ((n - 1) % 3) + 1 === Number(b.on.slice(3)) ? 3 : 0;
         default: { const k = Number(b.on.slice(5)); return real && Math.ceil(n / 12) === k ? 3 : 0; }
       }
     })();
@@ -147,14 +150,17 @@ export interface Dice {
   side: 'pass' | 'dont';
   last: [number, number] | null;
   said: string;
+  /** The last throws' totals, newest first. */
+  history: number[];
 }
 
-export const newDice = (variant: Dice['variant']): Dice => ({ variant, point: 0, main: 7, bet: 0, side: 'pass', last: null, said: '' });
+export const newDice = (variant: Dice['variant']): Dice => ({ variant, point: 0, main: 7, bet: 0, side: 'pass', last: null, said: '', history: [] });
 
 /** One roll. Returns what comes back to you (stake included) when the bet is settled, else null. */
 export function rollDice(g: Dice, rng: Rng): number | null {
   const a = 1 + Math.floor(rng.next() * 6), b = 1 + Math.floor(rng.next() * 6), s = a + b;
   g.last = [a, b];
+  g.history = [s, ...g.history].slice(0, 16);
   const win = (text: string) => { g.said = text; g.point = 0; const back = g.bet * 2; g.bet = 0; return back; };
   const lose = (text: string) => { g.said = text; g.point = 0; g.bet = 0; return 0; };
   const push = (text: string) => { g.said = text; g.point = 0; const back = g.bet; g.bet = 0; return back; };
@@ -191,7 +197,7 @@ export const SLOT_SYMBOLS = ['🍒', '🍋', '🍊', '🍑', '🔔', 'BAR', '7']
 /** How often each symbol comes up on a reel. */
 const SLOT_WEIGHTS = [7, 6, 5, 4, 3, 2, 1];
 /** Three of a kind pays (times the bet); two cherries pay double. About 89% comes back. */
-const SLOT_PAYS = [10, 15, 20, 30, 50, 100, 250];
+export const SLOT_PAYS = [10, 15, 20, 30, 50, 100, 250];
 
 export function pullSlots(rng: Rng, bet: number): { reels: number[]; back: number } {
   const total = SLOT_WEIGHTS.reduce((a, b) => a + b, 0);

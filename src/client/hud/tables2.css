@@ -1,0 +1,136 @@
+/* The table screen's second sheet (tables.css first): the action bar, sliders, history, the
+   floating win/loss, poker's seats, chips by value, dealt cards, and each game's new parts. */
+
+/* The box: 75% of the window on a desktop (all of it on a small screen); a strip along the top with
+   the table's name, your money and the way out; the table filling the middle; every control along
+   the foot: the other choices left, the moves big and the bet sizing beside them right. */
+.tableroom .garage-box.tr-box { width: 75vw; height: 75vh; flex-direction: column; }
+@media (max-width: 900px), (max-height: 620px) { .tableroom .garage-box.tr-box { width: calc(100vw - 16px); height: calc(100vh - 16px); } }
+.tr-top { flex: none; display: flex; align-items: center; gap: 16px; padding: 8px 14px; background: rgba(10,12,15,0.9); border-bottom: 1px solid var(--line); }
+.tr-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 12px; overflow: hidden; }
+.tr-title h2 { margin: 0; font-size: 18px; white-space: nowrap; }
+.tr-title span { color: var(--dim); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr-money { color: var(--cash); font-size: 15px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tr-leave { padding: 6px 14px; font-size: 13px; }
+.tr-leave.armed { background: #6a2226; border-color: #b0302a; color: #fff; }
+.tr-view { flex: 1 1 auto; min-height: 0; }
+.tr-controls { flex: none; display: flex; align-items: flex-end; gap: 18px; padding: 10px 14px 12px; background: rgba(10,12,15,0.92); border-top: 1px solid var(--line); }
+.tr-aux { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 20px; max-height: 160px; overflow-y: auto; scrollbar-width: thin; }
+.tr-aux .tr-gname { margin-bottom: 4px; }
+.tr-aux .tr-btns, .tr-aux .tr-btns.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.tr-aux .tr-btns .tr-btn { flex: none; padding: 7px 11px; }
+.tr-main { flex: none; display: flex; align-items: flex-end; gap: 12px; }
+
+/* The moves: big buttons side by side, as an online table's. */
+.tr-bar { display: flex; gap: 8px; }
+.tr-act { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-width: 128px; min-height: 66px; padding: 8px 14px;
+  border-radius: 6px; border: 1px solid rgba(255,255,255,0.14); background: #b3202a; color: #fff; font-weight: 700; font-size: 19px; letter-spacing: 0.01em;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25); }
+.tr-act:hover { background: #cc2833; }
+.tr-act b { font-size: 16px; font-weight: 700; color: #fff; }
+.tr-act.tone-go { background: var(--accent); color: #111; } .tr-act.tone-go:hover { background: #ffd95c; } .tr-act.tone-go b { color: #1d5c34; }
+.tr-act:disabled { opacity: 0.35; }
+
+/* Bet sizing: the presets as a row of tabs over the slider, its value boxed, − and + either side. */
+.tr-group.size { width: 340px; }
+.tr-group.size .tr-gname { display: none; }
+.tr-group.size .tr-btns { display: flex; gap: 0; border-radius: 6px 6px 0 0; overflow: hidden; }
+.tr-group.size .tr-btn { flex: 1 1 0; border-radius: 0; padding: 8px 4px; background: #8e1b22; border: none; border-right: 1px solid rgba(0,0,0,0.3); color: #fff; font-weight: 700; font-size: 13px; text-align: center; align-items: center; }
+.tr-group.size .tr-btn.on { background: #c9343e; color: #fff; }
+.tr-slider { display: flex; align-items: center; gap: 6px; padding: 7px 8px; background: #22262d; border-radius: 0 0 6px 6px; }
+.tr-group.size .tr-slider:first-child, .tr-aux .tr-slider { border-radius: 6px; }
+.tr-slider input[type=range] { flex: 1; min-width: 80px; accent-color: #c9343e; height: 22px; cursor: pointer; }
+.tr-sv { min-width: 82px; padding: 4px 8px; border-radius: 4px; background: #0e1014; text-align: right; font-size: 15px; color: #fff; font-variant-numeric: tabular-nums; }
+.tr-step { width: 28px; height: 28px; padding: 0; border-radius: 50%; background: #b3202a; border: none; color: #fff; font-size: 18px; font-weight: 700; line-height: 1; }
+.tr-side .kf, .tr-top .kf { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Hand history: three lines over the table's foot, or all of it opened up from the corner. */
+.tr-histbtn { position: absolute; right: 12px; bottom: 10px; z-index: 3; padding: 4px 10px; font-size: 12px; background: rgba(0,0,0,0.45); border: 1px solid rgba(255,255,255,0.15); }
+.tr-log.open { position: absolute; left: 12px; right: 12px; bottom: 44px; top: 30%; z-index: 3; overflow-y: auto; border-radius: 8px;
+  background: rgba(10,12,15,0.92); border: 1px solid rgba(255,255,255,0.12); padding: 10px 14px; scrollbar-width: thin; }
+.tr-log.open div { opacity: 1 !important; padding: 1px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+
+/* A round's win or loss floating up over the table. */
+.tr-float { position: absolute; left: 50%; top: 42%; transform: translateX(-50%); z-index: 4; pointer-events: none; }
+.tr-delta { font-size: 34px; font-weight: 800; letter-spacing: 0.02em; text-shadow: 0 3px 8px rgba(0,0,0,0.8); animation: tr-up 1.8s ease-out forwards; text-align: center; }
+.tr-delta.up { color: #7dffa0; } .tr-delta.down { color: #ff8a80; font-size: 24px; }
+@keyframes tr-up { 0% { opacity: 0; transform: translateY(14px) scale(0.9); } 12% { opacity: 1; transform: translateY(0) scale(1.05); } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(-46px); } }
+
+/* Cards: the small suit under the rank, the big ones for your hand, dealt in with a flick. */
+.pc s { position: absolute; left: 6px; top: 21px; text-decoration: none; font-size: 12px; line-height: 1; }
+.pc.sm s { display: none; }
+.pc.big { width: 64px; height: 90px; } .pc.big b { font-size: 20px; } .pc.big i { font-size: 42px; top: 30px; } .pc.big s { top: 25px; font-size: 14px; }
+.pc.slot { background: transparent; box-shadow: inset 0 0 0 2px rgba(243,234,210,0.18); }
+.pc.deal { animation: pc-deal 0.32s ease-out both; }
+@keyframes pc-deal { from { opacity: 0; transform: translate(0, -40px) rotate(-12deg) scale(0.8); } to { opacity: 1; transform: none; } }
+
+/* Chips coloured by value, as casino chips go. */
+.tchip.w { background: #e8e6df; color: #222; border-color: rgba(0,0,0,0.35); }
+.tchip.f { background: #b3262c; } .tchip.q { background: #1f7a43; } .tchip.c1 { background: #1b1b1e; }
+.tchip.c5 { background: #6a2a8a; } .tchip.k1 { background: #c98a1a; color: #221a08; } .tchip.k5 { background: #c2185b; }
+
+/* Poker: a pod per seat (initial, name, stack), what they did, and a clock on whoever's thinking. */
+.felt.poker .tseat { gap: 4px; }
+.tcards { min-height: 51px; display: flex; align-items: flex-end; }
+.tseat.you .tcards { min-height: 90px; }
+.tpod { display: flex; align-items: center; gap: 7px; padding: 4px 12px 4px 4px; border-radius: 22px; background: rgba(8,10,12,0.82); border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 3px 8px rgba(0,0,0,0.5); }
+.tav { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #3a4552; color: #fff; font-weight: 800; font-size: 15px; flex: none; }
+.tseat.you .tav { background: #ffcc33; color: #111; }
+.tid { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+.tid b { font-size: 13px; color: #fff; white-space: nowrap; } .tid em { font-style: normal; font-size: 13px; color: #e9cf86; font-variant-numeric: tabular-nums; }
+.tseat.acting .tpod { border-color: #ffcc33; box-shadow: 0 0 0 2px rgba(255,204,51,0.55), 0 0 16px rgba(255,204,51,0.45); }
+.tseat.winner .tpod { border-color: #7dffa0; box-shadow: 0 0 0 2px rgba(125,255,160,0.6), 0 0 20px rgba(125,255,160,0.5); }
+.tseat .tname { display: none; }
+.tlast { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; padding: 2px 8px; border-radius: 9px; background: rgba(0,0,0,0.6); color: #ddd; white-space: nowrap; }
+.tlast.fold { color: #ff9a92; } .tlast.call { color: #8fd0ff; } .tlast.raise { color: #ffd35c; } .tlast.win { background: #1f7a43; color: #fff; }
+.tstrength { font-size: 12px; font-weight: 700; color: #fff3d0; text-shadow: 0 1px 3px #000; white-space: nowrap; }
+.tclock { position: absolute; inset: -4px; width: 40px; height: 40px; transform: rotate(-90deg); pointer-events: none; }
+.tclock circle { fill: none; stroke: #ffcc33; stroke-width: 3; stroke-dasharray: 100.5; stroke-dashoffset: 0; animation-name: tclock; animation-timing-function: linear; animation-fill-mode: forwards; }
+@keyframes tclock { to { stroke-dashoffset: 100.5; } }
+.felt.poker .dbtn { position: absolute; transform: translate(-50%, -50%); margin: 0; width: 22px; height: 22px; line-height: 22px; text-align: center; font-weight: 800; font-size: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.6); border: 1px solid #999; }
+.tbet { display: flex; align-items: center; gap: 4px; }
+.tbet b { font-size: 12px; color: #fff3d0; text-shadow: 0 1px 3px #000; font-variant-numeric: tabular-nums; }
+.tstack { display: inline-flex; flex-direction: column-reverse; }
+.tstack i { display: block; width: 18px; height: 5px; margin-top: -2px; border-radius: 50%; background: #b3262c; border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 1px 1px rgba(0,0,0,0.5); }
+.tboard { display: flex; gap: 6px; }
+.tbanner { padding: 7px 16px; border-radius: 18px; background: rgba(0,0,0,0.72); color: #fff3d0; font-weight: 700; font-size: 14px; white-space: nowrap; max-width: 90%; overflow: hidden; text-overflow: ellipsis; }
+.tbanner.good { background: #1f7a43; color: #fff; font-size: 16px; }
+
+/* Roulette: chips on the layout, the dolly on the number, the bets it paid lit. */
+.rnums { grid-template-columns: repeat(13, 1fr); }
+.rdoz, .routs { margin-right: calc((100% - 46px) / 13); }
+.rc, .ro { position: relative; }
+.rc .tchip, .ro .tchip { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 9px; padding: 1px 4px; z-index: 1; }
+.ro.col { font-size: 10px; background: rgba(0,0,0,0.12); }
+.rc.paid, .ro.paid { box-shadow: inset 0 0 0 3px #7dffa0; }
+.dolly { position: absolute; right: 2px; top: 2px; width: 9px; height: 9px; border-radius: 50%; background: #f0f0f0; box-shadow: 0 0 6px #fff; }
+.rres { flex: none; font-weight: 800; font-size: 16px; color: #ff9a92; }
+.rres.good { color: #7dffa0; }
+
+/* Blackjack: the betting circle; each hand's outcome. */
+.tcircle { display: grid; place-items: center; width: 62px; height: 62px; border-radius: 50%; border: 2px solid rgba(233,207,134,0.7); }
+.tcircle.empty { width: 84px; height: 84px; border-style: dashed; }
+.tout.good { color: #7dffa0; } .tout.bad { color: #ff9a92; }
+.thand .tname { font-variant-numeric: tabular-nums; }
+
+/* Slots: the reels blur round and stop left to right; a big win shouts. */
+.treel { overflow: hidden; }
+.treel b { font-weight: 900; }
+.treel.spin b { animation: reel-spin 0.12s linear infinite; filter: blur(3px); }
+@keyframes reel-spin { from { transform: translateY(-60%); } to { transform: translateY(60%); } }
+.treel:not(.spin) b { animation: reel-land 0.18s ease-out; }
+@keyframes reel-land { from { transform: translateY(-18%); } to { transform: none; } }
+.twon.big { font-size: 34px; color: #ffe38a; animation: big-win 0.6s ease-in-out 3; }
+@keyframes big-win { 50% { transform: scale(1.12); text-shadow: 0 0 26px rgba(255,204,51,1); } }
+
+/* Faro: the casekeeper's beads under each card. */
+.fcase { display: flex; gap: 2px; justify-content: center; margin-top: 3px; }
+.fcase i { width: 6px; height: 6px; border-radius: 50%; background: rgba(243,234,210,0.25); }
+.fcase i.out { background: #e9cf86; }
+.frank { display: flex; flex-direction: column; align-items: center; }
+
+/* Dice history (craps, hazard): the last throws, sevens marked. */
+.dhist { display: flex; gap: 3px; flex-wrap: wrap; }
+.dh { min-width: 22px; padding: 1px 4px; border-radius: 4px; background: rgba(0,0,0,0.3); color: #f3ead2; font-size: 12px; font-weight: 700; text-align: center; }
+.dh.seven { background: #b3262c; color: #fff; }
+.ctop .dhist { flex: 0 1 auto; max-width: 40%; }

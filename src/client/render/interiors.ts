@@ -62,7 +62,8 @@ export class Interiors {
   /** Greys out everything but the stairwell you're in. */
   private shade: StairShade;
 
-  constructor(private scene: THREE.Scene, private city: City) {
+  /** `furnished`: props drawn as models elsewhere (render/gameTables.ts), left out here. */
+  constructor(private scene: THREE.Scene, private city: City, furnished: ReadonlySet<object> = new Set()) {
     this.shade = new StairShade(scene, city);
     // Vault doors: a thick steel slab with a wheel, standing in the gap in the vault wall.
     const steel = new THREE.MeshStandardMaterial({ color: '#7d848c', metalness: 0.7, roughness: 0.35 });
@@ -89,7 +90,7 @@ export class Interiors {
       for (const w of i.walls) add(w.rect, 0, i.wallH, WALL[i.layout]);
       for (const r of i.rest) add(r.rect, 0, i.wallH, CUT);
       // Game tables (world/tables.ts) wear green baize.
-      for (const p of i.props) add(p.rect, FLAT.has(p.kind) ? 0.06 : 0, p.h, p.kind === 'table' && felt.has(p) ? FELT : PROP[p.kind]);
+      for (const p of i.props) if (!furnished.has(p)) add(p.rect, FLAT.has(p.kind) ? 0.06 : 0, p.h, p.kind === 'table' && felt.has(p) ? FELT : PROP[p.kind]);
     }
     box.build(scene);
   }

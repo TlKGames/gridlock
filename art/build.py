@@ -32,8 +32,8 @@ import bpy  # noqa: E402
 
 import kit  # noqa: E402
 
-GRID = {"vehicles": 14.0, "weapons": 1.6}
-COLS = {"vehicles": 6, "weapons": 5}
+GRID = {"vehicles": 14.0, "weapons": 1.6, "furniture": 4.5}
+COLS = {"vehicles": 6, "weapons": 5, "furniture": 5}
 # The universe being built (--universe); Bayhaven, the default, keeps the top-level specs and output.
 UNIVERSE = "bayhaven"
 
@@ -96,9 +96,11 @@ def assemble(set_name, mid, objs, slot):
         j.parent = root
         parts.append(j)
     cols = COLS[set_name]
-    # Vehicles run from the origin toward +x; weapons sit in their own block to the left.
-    x0 = 0.0 if set_name == "vehicles" else -12.0 - cols * GRID[set_name]
-    root.location = (x0 + (slot % cols) * GRID[set_name], -(slot // cols) * GRID[set_name] * (0.55 if set_name == "vehicles" else 0.5), 0)
+    # Vehicles run from the origin toward +x; weapons sit in their own block to the left; furniture
+    # in a block of its own behind the vehicles.
+    x0 = 0.0 if set_name in ("vehicles", "furniture") else -12.0 - cols * GRID[set_name]
+    y0 = 20.0 if set_name == "furniture" else 0.0
+    root.location = (x0 + (slot % cols) * GRID[set_name], y0 - (slot // cols) * GRID[set_name] * (0.55 if set_name == "vehicles" else 0.5), 0)
     return root, kit.tris(parts)
 
 
@@ -139,6 +141,20 @@ def build_weapons(only):
         total += n
         print("%-16s %6d tris" % (wid, n))
     print("weapons: %d tris in all" % total)
+
+
+def build_furniture(only):
+    """Casino and card-room furniture (furniture.py), the same in every universe."""
+    import furniture
+    total = 0
+    for slot, fid in enumerate(furniture.MODELS):
+        if only and fid not in only:
+            continue
+        col = kit.coll(model_coll("furniture", fid), kit.coll(set_coll("furniture")))
+        _, n = assemble("furniture", fid, furniture.build(fid, col), slot)
+        total += n
+        print("%-16s %6d tris" % (fid, n))
+    print("furniture: %d tris in all" % total)
 
 
 def export(set_name):
@@ -195,7 +211,7 @@ def main(argv):
                         bpy.data.objects.remove(o, do_unlink=True)
                     bpy.data.collections.remove(c)
     for s in sets:
-        (build_vehicles if s == "vehicles" else build_weapons)(only)
+        {"vehicles": build_vehicles, "weapons": build_weapons, "furniture": build_furniture}[s](only)
         if "--export" in argv:
             export(s)
 

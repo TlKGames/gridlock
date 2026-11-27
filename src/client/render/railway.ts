@@ -7,7 +7,6 @@ import type { City } from '../../shared/world/cityTypes';
 import { WORLD } from '../../shared/world/worldSpec';
 import { PLATFORM_HALF, railColumns, type Railway, VIADUCT_HALF } from '../../shared/world/railgen';
 import { profileZ, type Way } from '../../shared/world/wayTypes';
-import { fadeable } from './highways';
 
 const STEP = 3;
 
@@ -81,7 +80,7 @@ export class RailwayView {
     const r = city.railway;
     if (!r) return;
     const way = city.ways.find((w) => w.kind === 'rail' && w.strip === r.strip);
-    const lam = (color: string, map?: THREE.Texture) => fadeable(new THREE.MeshLambertMaterial(map ? { map, side: THREE.DoubleSide } : { color, side: THREE.DoubleSide }));
+    const lam = (color: string, map?: THREE.Texture) => new THREE.MeshLambertMaterial(map ? { map, side: THREE.DoubleSide } : { color, side: THREE.DoubleSide });
     const across = r.strip ? 2 * VIADUCT_HALF : 2 * (Math.max(...r.tracks.map(Math.abs)) + 1.8);
     const center = r.strip ? 0 : (r.tracks[0] + r.tracks[r.tracks.length - 1]) / 2;
     const tex = trackTexture(across, r.tracks.map((t) => t - center), aniso);

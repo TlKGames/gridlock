@@ -3,7 +3,7 @@
 // friend is met at their place (they hang about by their card table), gives you their number, and
 // then either texts you when there's a game on or answers when you call; a game runs for
 // RULES.friendGameMinutes of game time. Caught cheating at a friend's, and they're done with you.
-import { FACTIONS, FRIENDS, pedIndex, RULES, TABLES } from '../../../shared/packs';
+import { FACTIONS, FRIENDS, GANGS, pedIndex, RULES, TABLES } from '../../../shared/packs';
 import type { S2C } from '../../../shared/protocol';
 import type { Player } from '../entities';
 import { removePed, spawnPed } from '../factory';
@@ -52,7 +52,8 @@ export function dialFriend(w: World, pl: Player, id: string): void {
 /** The friends whose number you have, for the phone's contacts. */
 export function sendFriends(pl: Player): void {
   const list = FRIENDS.filter((f) => pl.met.has(`friend:${f.id}`)).map((f): [string, string] => [`friend:${f.id}`, f.name]);
-  pl.send({ t: 'friends', list } satisfies S2C);
+  const games = GANGS.filter((g) => pl.met.has(`invite:${g}`) || pl.met.has(`game:${g}`));
+  pl.send({ t: 'friends', list, games } satisfies S2C);
 }
 
 /** Every so often: gangs' invites, friends' invites, and each friend standing by their table while
@@ -68,6 +69,7 @@ export function updateInvites(w: World, dt: number, playing: (table: number) => 
       const key = `invite:${t.gang}`;
       if (pl.met.has(key) || pl.met.has(`game:${t.gang}`) || (pl.respect[t.gang] ?? 0) < RULES.cardInviteRespect) continue;
       pl.met.add(key);
+      sendFriends(pl); // the game shows on your map now
       const spec = TABLES[t.spec];
       const gang = FACTIONS.find((f) => f.id === t.gang)?.name ?? t.gang;
       textTo(pl, gang, `There's a game in the back of ${t.name.split(' at ')[1] ?? 'the usual place'}. ${spec.buyIn ? `$${spec.buyIn[0].toLocaleString('en-US')} to sit down. ` : ''}Come alone, and come straight.`);

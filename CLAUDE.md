@@ -9,7 +9,7 @@ Server-authoritative Node simulation + three.js browser client. Read `docs/STATU
 - `npm start` — serve only (expects `dist/`); Railway runs `npm run build` then this (`railway.json`, honours `PORT`).
 - `npm run smoke [seconds]` — headless 6-bot soak test (tick time, NaN checks, message sizes).
 - `npx tsx scripts/universe.ts <universe> <script> [args]` — any check in another universe
-  (e.g. `redrock smoke 60`); `npx tsx scripts/redrock.ts` checks the western.
+  (e.g. `redrock smoke 60`); `npx tsx scripts/redrock.ts` checks the western, `scripts/terrain.ts` its hills.
 - Client URL `?u=<universe>` boots that universe (the lobby's Universe selector remembers it).
 - `npx tsx scripts/citystats.ts [seed]` — city generator stats.
 - Client URL params: `?play=Name#CODE` auto-joins (creates a room if no code), `?mute` silences audio.

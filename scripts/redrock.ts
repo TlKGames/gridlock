@@ -115,7 +115,7 @@ for (let t = 0; t < 30; t++) stepVehicle(pony.body, pony.spec, ctl(0, 1), DT, w.
 check(Math.abs(pony.body.angle) > 1.5 && Math.hypot(pony.body.x - p0.x, pony.body.y - p0.y) < 0.3, `standing, it turns on the spot (${pony.body.angle.toFixed(2)} rad in 1 s)`);
 pony.body.angle = 0; pony.body.av = 0;
 // Open ground (nothing to bump): only the gait itself.
-const open = { resolveObb: () => null } as unknown as typeof w.statics;
+const open = { resolveObb: () => null, gradeAt: () => 0, cliff: () => null } as unknown as typeof w.statics;
 for (let t = 0; t < 4 * 30; t++) stepVehicle(pony.body, pony.spec, ctl(1, 0, true), DT, open, true);
 let slide = 0;
 for (let t = 0; t < 30; t++) {

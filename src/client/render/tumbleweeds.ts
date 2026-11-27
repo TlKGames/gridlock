@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { ZONES } from '../../shared/packs';
 import { Rng } from '../../shared/rng';
 import type { CityMap } from '../../shared/world/city';
+import { groundAt } from '../../shared/world/terrain';
 
 /** At most this many in view; a new one every so often (s); how fast they go (m/s). */
 const MAX = 3;
@@ -105,10 +106,12 @@ export class Tumbleweeds {
       if (g.z <= 0) { g.z = 0; g.vz = Math.random() < 0.35 ? (1 + Math.random() * 2.2) * Math.min(1, v / 5) : 0; }
       g.spin += (v / g.r) * dt;
       g.hop += dt;
-      g.root.position.set(g.x, g.r + g.z, g.y);
+      // Over the hills (world/terrain.ts), its hop above the ground it's crossing.
+      const ground = groundAt(g.x, g.y);
+      g.root.position.set(g.x, ground + g.r + g.z, g.y);
       // Rolling about the axis across the wind, with a wobble.
       g.ball.rotation.set(wy * g.spin, Math.sin(g.hop * 1.7) * 0.4, -wx * g.spin);
-      g.shadow.position.set(g.x + 0.25, 0.03, g.y + 0.25);
+      g.shadow.position.set(g.x + 0.25, groundAt(g.x + 0.25, g.y + 0.25) + 0.03, g.y + 0.25);
       g.shadow.scale.setScalar(g.r * (1 - Math.min(0.5, g.z * 0.25)));
       if (g.x > view.x1 + 4 || g.y < view.y0 - 6 || g.y > view.y1 + 6 || !this.isOpen(g.x, g.y)) {
         g.alive = false;

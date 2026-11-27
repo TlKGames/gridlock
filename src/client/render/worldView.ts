@@ -8,6 +8,7 @@ import { materialOf } from '../../shared/materials';
 import type { EntityStore, ViewEntity } from '../net/entities';
 import { floorOf, groundOf, isWayStrip } from '../../shared/world/levels';
 import { heightAt } from '../../shared/world/ways';
+import { groundAt } from '../../shared/world/terrain';
 import { putCarLights } from './carLights';
 import type { Effects } from './effects';
 import { animatePed, HIP_H, makePed, muzzleOf, PED_S, type PedView, ridePed, setPedWeapon, SWING_TIME } from './pedMesh';
@@ -123,7 +124,7 @@ export class WorldView {
     for (const [id, o] of this.objs) if (!seen.has(id)) { this.scene.remove(o); this.objs.delete(id); }
   }
 
-  /** Is something on strip f drawn? The street and the highways always; a building's upper floor
+  /** Is something on strip f drawn? The street and the railway's viaduct always; a building's upper floor
    *  only when it's yours. */
   private shows(f: number): boolean {
     return f === 0 || isWayStrip(f) || f === this.myF;
@@ -157,8 +158,8 @@ export class WorldView {
     if (flags & PF.jump && v.hop <= 0) v.hop = 0.5;
     v.hop = Math.max(0, v.hop - dt);
     const lift = v.hop > 0 ? Math.sin(Math.PI * (1 - v.hop / 0.5)) * 0.9 : 0;
-    // Upstairs (world/levels.ts): over the building, at the floor's height; on a highway, over its
-    // avenue at the deck's height.
+    // Upstairs (world/levels.ts): over the building, at the floor's height; on a train's viaduct,
+    // over its corridor at the track's height.
     const g = groundOf(x, y);
     v.root.position.set(g.x, lift + heightAt(x, y), g.y);
     // Only your floor is drawn: people on another upper floor would float in mid-air.
@@ -260,12 +261,14 @@ export class WorldView {
     }
     const mine = own && own.vid === e.id && own.driving;
     const rx = mine ? own!.x : e.x, ry = mine ? own!.y : e.y, a = mine ? own!.angle : e.angle;
-    // On a highway (world/ways.ts): over its avenue, at the deck's height, tilted up or down a ramp.
+    // On a train's viaduct (world/ways.ts): over its corridor at the track's height; out in the
+    // hills (world/terrain.ts), on the slope and tilted with it.
     const g = groundOf(rx, ry), lift = heightAt(rx, ry);
     const x = g.x, y = g.y, alt = (mine ? own!.alt : e.alt) + lift;
+    // Its height over the hillside under it (a viaduct still counts as up).
+    const above = alt - groundAt(x, y);
     const cs = Math.cos(a) * 1.6, sn = Math.sin(a) * 1.6;
-    const pitch = lift > 0.02 || heightAt(rx + cs, ry + sn) > 0.02 || heightAt(rx - cs, ry - sn) > 0.02
-      ? Math.atan2(heightAt(rx + cs, ry + sn) - heightAt(rx - cs, ry - sn), 3.2) : 0;
+    const pitch = Math.atan2(heightAt(rx + cs, ry + sn) - heightAt(rx - cs, ry - sn), 3.2);
     // Down for good (a horse, not a wagon in harness): on its side.
     const down = wreck && !!mat.liesDown && !spec.trailer;
     // Spooked: up on its hind legs (nose up about its middle, lifted so the hind feet stay down).
@@ -289,7 +292,7 @@ export class WorldView {
     // from the server, interpolated.
     const trailerAngle = mine && own!.trailer !== undefined ? own!.trailer : a + (e.trailer - e.angle);
     if (v.trailer) v.trailer.rotation.y = -(trailerAngle - a);
-    const spinning = (flags & VF.driven) || alt > 0.3;
+    const spinning = (flags & VF.driven) || above > 0.3;
     for (const r of v.rotors) r.rotation.y += dt * (spinning ? 32 : 0);
     for (const r of v.tailRotors) r.rotation.z += dt * (spinning ? 40 : 0);
     if (v.legs.length) animateLegs(v, VEHICLES[e.data[2]], e.x, e.y, dt, !!(flags & VF.lame));
@@ -302,20 +305,20 @@ export class WorldView {
     const c = Math.cos(a), s = Math.sin(a);
     if (sirenOn) {
       const col = phase ? [0.2, 0.35, 1] : [1, 0.15, 0.1];
-      this.fx.glow.put(x, y, 0.1, 9 + night * 6, 1, 0, col[0], col[1], col[2], 0.18 + night * 0.25);
+      this.fx.glow.put(x, y, alt - above + 0.1, 9 + night * 6, 1, 0, col[0], col[1], col[2], 0.18 + night * 0.25);
     }
     const lit = !!(flags & VF.lights) && !wreck;
     for (const m of v.lamps) m.material = lampMaterial(v, m, lit);
-    putCarLights(this.fx.beams, this.fx.glow, spec, type, x, y, a, alt, trailerAngle, flags, night, dents);
+    putCarLights(this.fx.beams, this.fx.glow, spec, type, x, y, a, alt, above, trailerAngle, flags, night, dents);
     // Smoke from under the bonnet: a badly hurt vehicle, or a smashed front end (the engine's there).
     const steam = dmg >= 2 || dents[0] >= 2;
     if (mat.smokes && (flags & VF.smoke || steam) && !wreck && Math.random() < dt * (dents[0] >= 3 ? 12 : 8)) {
-      this.fx.smoke(x + c * spec.length * 0.35, y + s * spec.length * 0.35, alt + spec.height * 0.8, dmg >= 2 || dents[0] >= 3 ? 0.6 : 0.3);
+      this.fx.smoke(x + c * spec.length * 0.35, y + s * spec.length * 0.35, above + spec.height * 0.8, dmg >= 2 || dents[0] >= 3 ? 0.6 : 0.3);
     }
-    if (flags & VF.burning) { this.fx.fire(x, y, spec.width); if (night > 0.1) this.fx.glow.put(x, y, 0.1, 10, 1, 0, 1, 0.5, 0.15, 0.35 * night); }
+    if (flags & VF.burning) { this.fx.fire(x, y, spec.width); if (night > 0.1) this.fx.glow.put(x, y, alt - above + 0.1, 10, 1, 0, 1, 0.5, 0.15, 0.35 * night); }
     if (charred && Math.random() < dt * 3) this.fx.smoke(x, y, 1.5, 1);
     // Tyre marks and smoke when sliding.
-    this.skids.update(this.fx, e.id, spec, x, y, a, mine ? own!.vx : e.vx, mine ? own!.vy : e.vy, alt, dt, !!(flags & VF.burnout));
+    this.skids.update(this.fx, e.id, spec, x, y, a, mine ? own!.vx : e.vx, mine ? own!.vy : e.vy, above, dt, !!(flags & VF.burnout));
   }
 
   private projectile(e: ViewEntity): void {

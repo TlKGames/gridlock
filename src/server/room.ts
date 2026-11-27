@@ -18,7 +18,7 @@ import { StreetFurniture } from './game/systems/breakables';
 import { Dispatch } from './game/systems/dispatch';
 import { Economy } from './game/systems/economy';
 import { updateNpcPeds, updateVehicles } from './game/systems/movement';
-import { devTeleport, wayCrossings } from './game/systems/ways';
+import { devTeleport } from './game/systems/ways';
 import { updateTrains } from './game/systems/trains';
 import { CardTables } from './game/systems/cardTables';
 import { dialFriend, meetFriend, sendFriends, updateInvites } from './game/systems/cardInvites';
@@ -211,6 +211,9 @@ export class Room {
         // Dev only (npm run dev sets GRIDLOCK_DEV): "/tp x y" puts you (and your vehicle) there.
         const tp = process.env.GRIDLOCK_DEV ? /^\/tp\s+(-?[\d.]+)\s+(-?[\d.]+)$/.exec(text) : null;
         if (tp) { devTeleport(this.world, pl, Number(tp[1]), Number(tp[2])); break; }
+        // Dev only: "/cash n" sets your cash (testing the tables and shops).
+        const cash = process.env.GRIDLOCK_DEV ? /^\/cash\s+(\d+)$/.exec(text) : null;
+        if (cash) { pl.cash = Math.min(10_000_000, Number(cash[1])); break; }
         if (text) this.world.broadcast({ t: 'msg', kind: 'chat', text: `${pl.name}: ${text}` } satisfies S2C);
         break;
       }
@@ -331,7 +334,6 @@ export class Room {
     updateMounts(w, DT);
     updateVehicles(w, DT);
     updateTrains(w, DT);
-    wayCrossings(w);
     w.rebuildHashes();
     resolveContacts(w);
     this.furniture.update(DT);

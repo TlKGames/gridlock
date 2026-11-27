@@ -9,6 +9,8 @@ import { type GraffitiSpot, graffitiSpots } from './buildingSpots';
 import { ownInstance } from './hideable';
 import { Batch, byTile, lambert, UNIT } from './instancing';
 import { buildRocks } from './rocks';
+import { buildTrestles } from './trestles';
+import { groundUnder } from '../../shared/world/terrain';
 import { FixturesView } from './fixtures';
 import { StreetProps } from './streetProps';
 import { StreetPropsView } from './breakables';
@@ -64,6 +66,7 @@ export class CityMeshes {
     obs.build(scene);
     // Open country's buttes, mesas, outcrops and boulders; churches, barns, windmills, cacti...
     buildRocks(scene, city);
+    buildTrestles(scene, city);
     this.fixtures = new FixturesView(scene, city);
     this.trees(scene, city, rng);
     this.props = new StreetProps(scene, city, rng);
@@ -110,14 +113,14 @@ export class CityMeshes {
     const crown = new Batch(new THREE.IcosahedronGeometry(1, 1), lambert());
     const greens = ['#3f6b35', '#4b7a3a', '#365e30', '#5a8a42', '#2f5530', '#6b8f3a'];
     for (const t of city.trees) {
-      const h = 3 + t.r * 0.8;
-      trunk.add(t.x, 0, t.y, 1, h, 1, '#5a4030');
+      const h = 3 + t.r * 0.8, z = groundUnder(t.x, t.y, 0.4); // on a hillside: world/terrain.ts
+      trunk.add(t.x, z, t.y, 1, h, 1, '#5a4030');
       // Two or three overlapping lobes per crown read as foliage rather than a ball.
       const g = rng.pick(greens);
-      crown.add(t.x, h + t.r * 0.4, t.y, t.r, t.r * 0.8, t.r, g, rng.next() * 6);
+      crown.add(t.x, z + h + t.r * 0.4, t.y, t.r, t.r * 0.8, t.r, g, rng.next() * 6);
       for (let k = 0; k < 2; k++) {
         const a = rng.next() * Math.PI * 2, d = t.r * 0.55;
-        crown.add(t.x + Math.cos(a) * d, h + t.r * rng.range(0.1, 0.6), t.y + Math.sin(a) * d, t.r * 0.7, t.r * 0.6, t.r * 0.7, rng.pick(greens), rng.next() * 6);
+        crown.add(t.x + Math.cos(a) * d, z + h + t.r * rng.range(0.1, 0.6), t.y + Math.sin(a) * d, t.r * 0.7, t.r * 0.6, t.r * 0.7, rng.pick(greens), rng.next() * 6);
       }
     }
     trunk.build(scene);

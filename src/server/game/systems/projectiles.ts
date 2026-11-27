@@ -17,7 +17,10 @@ export function updateProjectiles(w: World, dt: number): void {
     const arc = !!p.arc;
     const nx = pr.x + pr.vx * dt, ny = pr.y + pr.vy * dt;
     if (arc) pr.vz -= G * dt;
-    let nz = pr.z + pr.vz * dt;
+    // z is above the ground under it. A lob is carried over the rise or fall of the land (world/
+    // terrain.ts), so a throw down a slope carries on and one up it lands short; a straight shot
+    // keeps its height over the ground, as a bullet's line does (aim is flat on the map).
+    let nz = pr.z + pr.vz * dt + (arc ? w.statics.groundAt(pr.x, pr.y) - w.statics.groundAt(nx, ny) : 0);
 
     const wall = w.statics.raycast(pr.x, pr.y, nx, ny, Math.max(0.3, nz));
     if (wall) {

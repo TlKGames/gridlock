@@ -1,12 +1,15 @@
 // Radar: the baked city map around you, place pins, players, hostiles, job blips, and waypoint
 // routes as dashed lines in their owners' colours (markers cling to the edge when out of range).
-import { SERVICES, type ServiceVerb } from '../../shared/packs';
+import { PROPERTIES, SERVICES, type ServiceVerb } from '../../shared/packs';
 import type { PlayerInfo } from '../../shared/protocol';
 import type { CityMap } from '../../shared/world/city';
+import type { CardVenue } from '../../shared/world/tables';
 import type { Blip } from '../game/jobs';
+import { CARD_ICON } from './cardMarks';
 import type { Pt } from '../game/route';
 import type { Mark } from '../game/waypoint';
 import { MAP_COLORS, bakeCityMap } from './mapArt';
+import { drawGlyph } from './mapGlyphs';
 import { phoneBlip } from './phoneIcon';
 
 const SCALE = 0.5; // px per metre in the baked image
@@ -38,7 +41,7 @@ export class Minimap {
 
   /** Draws the radar centred on (x, y) with `range` metres to the edge. */
   drawRadar(ctx: CanvasRenderingContext2D, size: number, x: number, y: number, angle: number, range: number, players: PlayerInfo[], meId: number,
-    owned: Set<number>, hostiles: { x: number; y: number }[], blips: Blip[] = [], marks: Mark[] = [], jobRoute: Pt[] = []): void {
+    owned: Set<number>, hostiles: { x: number; y: number }[], blips: Blip[] = [], marks: Mark[] = [], jobRoute: Pt[] = [], cards: CardVenue[] = []): void {
     const k = size / 2 / range;
     ctx.save();
     ctx.clearRect(0, 0, size, size);
@@ -73,9 +76,23 @@ export class Minimap {
       ctx.fillStyle = icon.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     }
+    for (const v of cards) {
+      const [px, py] = to(v.x, v.y);
+      if (px < -6 || py < -6 || px > size + 6 || py > size + 6) continue;
+      ctx.fillStyle = CARD_ICON.color; ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(px, py, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
     for (const p of this.map.city.properties) {
       const [px, py] = to(p.x, p.y);
       if (px < -6 || py < -6 || px > size + 6 || py > size + 6) continue;
+      const icon = PROPERTIES[p.spec].icon;
+      if (icon) {
+        // Its own small pin (a saloon's mug), ringed green when it's yours.
+        ctx.fillStyle = icon.color; ctx.strokeStyle = owned.has(p.id) ? '#6fe08a' : '#000'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(px, py, 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        drawGlyph(ctx, icon.glyph, px, py, 5.5, 'Bahnschrift, "Segoe UI", sans-serif');
+        continue;
+      }
       ctx.fillStyle = owned.has(p.id) ? '#6fe08a' : 'rgba(111,224,138,0.35)';
       ctx.beginPath(); ctx.moveTo(px, py - 5); ctx.lineTo(px + 5, py + 4); ctx.lineTo(px - 5, py + 4); ctx.fill();
     }
