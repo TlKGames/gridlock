@@ -4,6 +4,7 @@ import { OverheadFade } from './overheadFade';
 import type { Rect } from '../../shared/math';
 import { Rng } from '../../shared/rng';
 import type { CityMap } from '../../shared/world/city';
+import { waterfrontRails, RAIL_HEIGHT } from '../../shared/world/waterfront';
 import { LANE_W } from '../../shared/world/cityTypes';
 import { WORLD } from '../../shared/world/worldSpec';
 import { Batch, lambert, UNIT } from './instancing';
@@ -104,6 +105,15 @@ export class Water {
         timber.add(x, 0, y, 0.24, 0.4, 0.24, '#584431');
     }
     timber.build(scene);
+    const rails = new Batch(UNIT.box(), lambert());
+    for (const wall of waterfrontRails(map.city, map.shore, map.docks)) {
+      const w = wall.x1 - wall.x0, l = wall.y1 - wall.y0;
+      const x = (wall.x0 + wall.x1) / 2, y = (wall.y0 + wall.y1) / 2;
+      // Concrete parapet with a lighter cap, like the rails of the road bridges.
+      rails.add(x, 0, y, w, RAIL_HEIGHT - 0.12, l, '#969596');
+      rails.add(x, RAIL_HEIGHT - 0.12, y, w, 0.12, l, '#b8b5ac');
+    }
+    rails.build(scene);
     if (r) this.bridges(scene, map, r);
   }
 

@@ -11,6 +11,7 @@ const { seatPed, spawnVehicle } = await import('../src/server/game/factory');
 const { mooredBoats } = await import('../src/server/game/systems/moorings');
 const { DOCK_DEPTH, moorings } = await import('../src/shared/world/moorings');
 const { Breakables } = await import('../src/shared/world/breakables');
+const { stepVehicle, newBody, emptyControls } = await import('../src/shared/sim/physics');
 const { afloat } = await import('../src/shared/sim/boat');
 
 let failures = 0;
@@ -35,6 +36,25 @@ const moored = mooredBoats(w);
 const kinds = new Set(moored.map((m) => VEHICLES[m.type].id));
 check(moored.length >= 8, `${moored.length} moorings along the river and the coast (${[...kinds].join(', ')})`);
 check(moored.every((m) => afloat({ x: m.x, y: m.y, angle: m.angle, vx: 0, vy: 0, av: 0, alt: 0 }, VEHICLES[m.type], w.statics)), 'every moored boat is afloat');
+
+// Drive squarely at every dock, then repeat just beyond its edge against the rail.
+const sedan = VEHICLES[vehicleIndex('sedan')];
+const controls = { ...emptyControls(), throttle: 1 };
+function crossesShore(site: ReturnType<typeof moorings>[number], along: number): boolean {
+  const { nx, ny } = site;
+  const x = site.x - ny * along, y = site.y + nx * along;
+  const car = newBody(x - nx * 8, y - ny * 8, Math.atan2(ny, nx));
+  car.vx = nx * sedan.maxSpeed;
+  car.vy = ny * sedan.maxSpeed;
+  for (let tick = 0; tick < 90; tick++) {
+    stepVehicle(car, sedan, controls, 1 / 30, w.statics, true);
+    if ((car.x - x) * nx + (car.y - y) * ny > DOCK_DEPTH) return true;
+  }
+  return false;
+}
+const sites = moorings(w.city);
+check(sites.every(site => crossesShore(site, 0)), 'a car can drive onto and off every dock');
+check(sites.every(site => !crossesShore(site, 8) && !crossesShore(site, -8)), 'rails stop a full-speed sedan on both sides of every dock');
 
 // Walk up to one on the river and the boat is there when you arrive.
 const river = w.map.river!; // Bayhaven has its river

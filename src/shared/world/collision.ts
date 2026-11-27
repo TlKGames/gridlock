@@ -1,7 +1,7 @@
 // Static collision world: axis-aligned boxes (buildings, containers, fences) and tree trunks,
 // bucketed in a uniform grid. Used by server physics and client-side prediction alike.
 import { dockRect, moorings } from './moorings';
-import { waterfront } from './waterfront';
+import { waterfront, waterfrontRails, RAIL_HEIGHT } from './waterfront';
 import { rectContains } from '../math';
 import type { City } from './cityTypes';
 import { MAP_SIZE } from './cityTypes';
@@ -44,6 +44,7 @@ export class StaticWorld {
     this.terrain = city.terrain;
     this.shore = waterfront(city);
     this.docks = moorings(city).map(dockRect);
+    for (const rail of waterfrontRails(city, this.shore, this.docks)) this.addBox({ ...rail, h: RAIL_HEIGHT });
     this.sea = city.edge === 'sea';
     this.ponds = city.ponds;
     // Walk-in buildings: their room's walls (with the door gap), furniture and the solid rest,

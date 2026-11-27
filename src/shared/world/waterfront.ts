@@ -40,3 +40,35 @@ export function waterfront(city: City) {
   }
   return { lo, hi, river, walks };
 }
+
+// Along the seafront and its river quays. Cut each run at the actual dock face or
+// bridge carriageway so its visible end is also the end of the collision wall.
+export const RAIL_HEIGHT = 1.05;
+export function waterfrontRails(city: City, shore: ReturnType<typeof waterfront>, docks: Rect[]): Rect[] {
+  if (city.edge !== 'sea') return [];
+  const { lo, hi, river } = shore;
+  const runs: Rect[] = [], width = 0.28;
+  function edge(horizontal: boolean, line: number, inward: number, start: number, end: number, gaps: Rect[]) {
+    const inner = line + inward * width, low = Math.min(line, inner), high = Math.max(line, inner);
+    function rail(a: number, b: number) {
+      if (b <= a) return;
+      runs.push(horizontal ? { x0: a, x1: b, y0: low, y1: high } : { x0: low, x1: high, y0: a, y1: b });
+    }
+    const cuts = gaps.filter(g => horizontal ? g.y0 <= line && line <= g.y1 : g.x0 <= line && line <= g.x1)
+      .map(g => horizontal ? [g.x0, g.x1] : [g.y0, g.y1]).sort((a, b) => a[0] - b[0]);
+    let cursor = start;
+    for (const [a, b] of cuts) {
+      rail(cursor, Math.min(a, end));
+      cursor = Math.max(cursor, b);
+    }
+    rail(cursor, end);
+  }
+  const banks = river ? [[lo, river.y0], [river.y1, hi]] : [[lo, hi]];
+  for (const [north, south] of banks) {
+    edge(true, north, 1, lo, hi, north === lo ? docks : [...docks, ...city.bridges]);
+    edge(true, south, -1, lo, hi, south === hi ? docks : [...docks, ...city.bridges]);
+    edge(false, lo, 1, north + width, south - width, docks);
+    edge(false, hi, -1, north + width, south - width, docks);
+  }
+  return runs;
+}
