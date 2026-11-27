@@ -2,6 +2,7 @@
 // Body (torso, belt, head, hair/hat), each limb (with hand/shoe) are merged vertex-coloured meshes.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { visibleHair } from '../../shared/packs/hairstyles';
 import { hash32 } from '../../shared/math';
 import { CHARACTER_LOOKS, type CharLook, HAIR, PEDS, SHOES, WEAPONS } from '../../shared/packs';
 import { WORLD } from '../../shared/world/worldSpec';
@@ -90,7 +91,6 @@ export function makePed(id: number, arch: number, playerColor: string | null, ch
   const look = PEDS[arch].look;
   const h = hash32(id);
   const { skin, top, bottom, hat, hair, shoes, style } = colours(id, arch, playerColor, chosen);
-  const longHair = style === 1;
   const bodyGeo = cached(`b:${skin}:${top}:${bottom}:${hat}:${hair}:${style}`, () => {
     const parts = [
       cbox(0.3, 0.26, 0.54, 0, 1.38, 0, top),          // chest / shoulders
@@ -99,13 +99,13 @@ export function makePed(id: number, arch: number, playerColor: string | null, ch
       cbox(0.28, 0.12, 0.44, 0, 0.84, 0, bottom),      // hips
       cbox(0.11, 0.08, 0.13, 0, 1.55, 0, skin),        // neck
       cbox(0.25, 0.27, 0.23, 0.01, 1.72, 0, skin),     // head
-      cbox(0.05, 0.05, 0.2, 0.13, 1.74, 0, '#1a1a1a'), // brows / eyes line facing forward
+      cbox(0.011, 0.027, 0.032, 0.138, 1.745, -0.056, '#29221f'),
+      cbox(0.011, 0.027, 0.032, 0.138, 1.745, 0.056, '#29221f'),
+      cbox(0.038, 0.043, 0.033, 0.149, 1.705, 0, skin),
+      cbox(0.011, 0.012, 0.052, 0.138, 1.66, 0, new THREE.Color(skin).multiplyScalar(0.48).getStyle()),
     ];
     if (hat) parts.push(cbox(0.3, 0.09, 0.27, 0, 1.88, 0, hat), cbox(0.12, 0.03, 0.25, 0.17, 1.84, 0, hat));
-    else if (style !== 2) {
-      parts.push(cbox(0.27, 0.07, 0.25, -0.01, 1.87, 0, hair));
-      parts.push(cbox(0.08, longHair ? 0.34 : 0.18, 0.25, -0.12, longHair ? 1.66 : 1.74, 0, hair));
-    }
+    for (const piece of visibleHair(style, !!hat)) parts.push(cbox(...piece, hair));
     return parts;
   });
   const legGeo = cached(`l:${bottom}:${shoes}`, () => [cbox(0.17, 0.78, 0.17, 0, -0.39, 0, bottom), cbox(0.25, 0.09, 0.16, 0.04, -0.82, 0, shoes)]);

@@ -4,6 +4,7 @@
 // No phones: the outfits post their work on job posts (a brief, no call), and their riders in town
 // give it face to face. Its cast (content/redrock/characters) is the people you can walk up and
 // talk to, shown in bubbles, not voiced yet; the player's side is its own (content/redrock/player).
+import { HAIRSTYLES } from '../../shared/packs/hairstyles';
 import player from '../../../content/redrock/player/player.json';
 import bankGuard from '../../../content/redrock/characters/bank_guard/bank_guard.json';
 import dryCreek from '../../../content/redrock/characters/dry_creek_hand/dry_creek_hand.json';
@@ -95,7 +96,7 @@ export const REDROCK: Universe = {
   looks: {
     skin: SKIN,
     hair: HAIR,
-    hairStyle: ['Short', 'Long', 'Shaved'],
+    hairStyle: HAIRSTYLES.map(style => style.name),
     top: ['#e6dcc0', '#c9b48a', '#8a6a4a', '#5a6a7a', '#7a3a2a', '#1a1612', '#4a5a3a', '#9a8a6a', '#d9a62b', '#28324a'],
     bottom: ['#3a3024', '#4a3a2a', '#2a2a30', '#5a4a3a', '#6a5a44', '#1a1612'],
     hat: ['', '#4a3a2a', '#2a2018', '#8a6a4a', '#c9b48a', '#1a1612', '#e6dcc0'],

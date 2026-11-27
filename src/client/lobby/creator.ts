@@ -1,7 +1,8 @@
-// Character creator: big preview, name with a dice roll, look swatches, Random / Undo / Redo
-// (Ctrl+Z / Ctrl+Y outside the name field). Edits are recorded as {name, look} snapshots.
+// Character creator: big preview, name with a dice roll, look swatches, randomization and preview rotation
+// Ctrl+Z / Ctrl+Y still undo or redo edits outside the name field.
 import { CHARACTER_LOOKS, type CharLook, LOOK_PARTS, type LookPart, NAME_PARTS, PLAYER_VOICES, youLineId } from '../../shared/packs';
 import { clipOf } from '../audio/voiceClips';
+import { CreatorPreview } from './creatorPreview';
 import { figureCanvas } from './figure';
 
 export interface Draft { name: string; look: CharLook; voice: string }
@@ -17,7 +18,7 @@ function playSample(voice: string): void {
   void sampleAudio.play().catch(() => { /* blocked or missing: stays quiet */ });
 }
 
-const LABEL: Record<LookPart, string> = { skin: 'Skin', hair: 'Hair colour', hairStyle: 'Hair', top: 'Top', bottom: 'Trousers', hat: 'Hat' };
+const LABEL: Record<LookPart, string> = { skin: 'Skin', hair: 'Hair colour', hairStyle: 'Hairstyle', top: 'Top', bottom: 'Trousers', hat: 'Hat' };
 const rnd = (n: number) => Math.floor(Math.random() * n);
 const pick = <T>(a: T[]): T => a[rnd(a.length)];
 
@@ -41,18 +42,21 @@ export class Creator {
   private draft: Draft = { name: rollName(), look: randomLook(false), voice: PLAYER_VOICES[Math.floor(Math.random() * PLAYER_VOICES.length)].id };
   /** The name came from a roll (Random may re-roll it); typing makes it the player's own. */
   private rolledName = true;
+  private preview?: CreatorPreview;
   private undo: Draft[] = [];
   private redo: Draft[] = [];
   error = '';
   private keys = (e: KeyboardEvent) => this.onKey(e);
 
   constructor(private root: HTMLElement, private canCancel: boolean, private create: (d: Draft) => void, private cancel: () => void) {
+    try { this.preview = new CreatorPreview(); } catch { /* Keep the flat portrait when WebGL is unavailable. */ }
     window.addEventListener('keydown', this.keys);
     this.render();
   }
 
   dispose(): void {
     window.removeEventListener('keydown', this.keys);
+    this.preview?.dispose();
   }
 
   private apply(next: Draft, rolled = this.rolledName): void {
@@ -105,18 +109,19 @@ export class Creator {
 
   private stage(): HTMLElement {
     const s = el('div', 'creator-stage');
-    s.appendChild(figureCanvas(this.draft.look, 96, 192));
+    s.appendChild(this.preview?.show(this.draft.look) ?? figureCanvas(this.draft.look, 96, 192));
     const tools = el('div', 'creator-tools');
     const tool = (label: string, title: string, enabled: boolean, act: () => void, cls = '') => {
       const b = el('button', cls, label);
       b.title = title;
+      b.setAttribute('aria-label', title);
       b.disabled = !enabled;
       b.addEventListener('click', act);
       tools.appendChild(b);
     };
     tool('Random', 'Random look and name', true, () => this.apply({ ...this.draft, name: this.rolledName ? rollName() : this.draft.name, look: randomLook() }), 'grow');
-    tool('↶', 'Undo (Ctrl+Z)', this.undo.length > 0, () => this.step(this.undo, this.redo));
-    tool('↷', 'Redo (Ctrl+Y)', this.redo.length > 0, () => this.step(this.redo, this.undo));
+    tool('↶', 'Rotate left', !!this.preview, () => this.preview?.rotate(-1));
+    tool('↷', 'Rotate right', !!this.preview, () => this.preview?.rotate(1));
     s.appendChild(tools);
     return s;
   }
@@ -164,13 +169,21 @@ export class Creator {
   private partRow(part: LookPart): HTMLElement {
     const box = el('div', 'look-part');
     box.appendChild(el('small', 'look-label', LABEL[part]));
-    const row = el('div', part === 'hairStyle' ? 'segmented' : 'swatches');
+    if (part === 'hairStyle') {
+      const select = el('select', '');
+      select.setAttribute('aria-label', LABEL[part]);
+      CHARACTER_LOOKS[part].forEach((name, i) => select.add(new Option(name, String(i))));
+      select.value = String(this.draft.look.hairStyle);
+      select.addEventListener('change', () => this.apply({ ...this.draft, look: { ...this.draft.look, hairStyle: Number(select.value) } }));
+      box.appendChild(select);
+      return box;
+    }
+    const row = el('div', 'swatches');
     CHARACTER_LOOKS[part].forEach((v, i) => {
       const on = this.draft.look[part] === i;
-      const text = part === 'hairStyle' ? v : '';
-      const b = el('button', `${part === 'hairStyle' ? 'seg' : 'sw'}${on ? ' on' : ''}${part === 'hat' && i === 0 ? ' none' : ''}`, text);
-      if (!text && v) b.style.background = v;
-      b.title = part === 'hat' && i === 0 ? 'No hat' : text || LABEL[part];
+      const b = el('button', `sw${on ? ' on' : ''}${part === 'hat' && i === 0 ? ' none' : ''}`);
+      if (v) b.style.background = v;
+      b.title = part === 'hat' && i === 0 ? 'No hat' : LABEL[part];
       b.addEventListener('click', () => { if (!on) this.apply({ ...this.draft, look: { ...this.draft.look, [part]: i } }); });
       row.appendChild(b);
     });
