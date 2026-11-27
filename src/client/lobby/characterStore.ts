@@ -52,7 +52,7 @@ export function saveProgress(id: string, p: CharacterProgress): void {
   const list = loadAll();
   const c = list.find((x) => x.id === id);
   if (!c) return; // deleted meanwhile
-  Object.assign(c, { cash: p.cash, bank: p.bank, garage: p.garage, felonies: p.felonies, deaths: p.deaths, respect: p.respect, met: p.met ?? c.met, lastPlayed: Date.now() });
+  Object.assign(c, { cash: p.cash, bank: p.bank, crapsReceipt: p.crapsReceipt, garage: p.garage, felonies: p.felonies, deaths: p.deaths, respect: p.respect, met: p.met ?? c.met, lastPlayed: Date.now() });
   // No spot while dead or busted: keep the last good one.
   if (p.last) c.last = p.last;
   store(list);

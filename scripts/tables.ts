@@ -118,20 +118,17 @@ room.onMessage(pl, { t: 'table', op: 'meet', table: ft.id } as never); ticks(1);
 check(msgs.some((m) => m.t === 'friends'), 'meeting them puts them in your phone');
 for (let k = 0; k < 6 && !view(); k++) { room.onMessage(pl, { t: 'dial', gang: `friend:${ft.friend}` } as never); ticks(1); send({ op: 'sit', table: ft.id, n: 100 }); ticks(2); }
 check(!!view()?.poker, 'after a call, their game\'s on and you sit in');
-// Cheating at a friend's: sooner or later they see it and throw you out.
-let thrown = false;
-pl.cash += 5000;
-for (let k = 0; k < 1200 && !thrown; k++) {
-  ticks(10);
-  const v = view();
-  if (!v) { thrown = true; break; }
-  if (v.cheats?.includes('ace')) send({ op: 'cheat', s: 'ace' });
-  else if (v.cheats?.includes('peek')) send({ op: 'cheat', s: 'peek' });
-  if (v.poker?.between && v.chips <= 0) send({ op: 'rebuy' });
-  if (v.poker?.yourTurn) send({ op: 'call' });
-  if (!view()) thrown = true;
+// Wait for the deal, then force only the detection roll during this peek.
+for (let i = 0; i < 90 && !view()?.cheats?.includes('peek'); i++) ticks(1);
+check(!!view()?.cheats?.includes('peek'), 'a peek is available during the hand');
+const next = w.rng.next;
+try {
+  w.rng.next = () => 0;
+  send({ op: 'cheat', s: 'peek' });
+} finally {
+  w.rng.next = next;
 }
-check(thrown && pl.met.has(`sore:${ft.friend}`), 'cheating at a friend\'s table: caught, thrown out, and they\'re done with you');
+check(view() === null && pl.met.has(`sore:${ft.friend}`), 'caught cheating at a friend’s table: thrown out, and they are done with you');
 
 console.log(failures ? `${failures} failed` : 'all ok');
 process.exit(failures ? 1 : 0);

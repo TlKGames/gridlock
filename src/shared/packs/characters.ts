@@ -52,6 +52,8 @@ export interface CharacterLast {
 
 /** What playing changes on a character; the server sends it back for the browser to save. */
 export interface CharacterProgress {
+  /** Reference to the server-side wallet at the current craps table. */
+  crapsReceipt?: string;
   cash: number;
   /** Money in the bank: safe from death and arrest; shops draw on it once cash runs out. */
   bank: number;

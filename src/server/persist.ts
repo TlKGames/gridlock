@@ -1,6 +1,7 @@
 // Room save files: property ownership and player profiles survive server restarts. A room belongs
 // to one universe (UNIVERSE.id); saves from another, or from an older save version, aren't loaded.
 // On a hosted server, point GRIDLOCK_DATA at a persistent volume so rooms outlive redeploys.
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { UNIVERSE } from '../shared/packs';
@@ -65,4 +66,28 @@ export function saveRoom(code: string, save: RoomSave): void {
   } catch (err) {
     console.warn(`[persist] could not save ${code}:`, err);
   }
+}
+
+interface CrapsWallet { receipt: string; cash: number; bank: number }
+
+/** One replaceable checkpoint per character, shared by all room workers on the save volume. */
+function walletPath(id: string): string {
+  const key = createHash('sha256').update(JSON.stringify([UNIVERSE.id, id])).digest('hex');
+  return join(DIR, `craps-${key}.json`);
+}
+
+export function recordCrapsWallet(id: string, wallet: CrapsWallet): void {
+  mkdirSync(DIR, { recursive: true });
+  const path = walletPath(id);
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  writeFileSync(tmp, JSON.stringify(wallet));
+  renameSync(tmp, path);
+}
+
+export function recoverCrapsWallet(id: string, receipt: unknown): CrapsWallet | undefined {
+  if (typeof receipt !== 'string' || receipt.length !== 36) return;
+  const path = walletPath(id);
+  if (!existsSync(path)) return;
+  const saved: CrapsWallet = JSON.parse(readFileSync(path, 'utf8'));
+  if (saved.receipt === receipt) return saved;
 }

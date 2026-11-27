@@ -42,7 +42,13 @@ export class LocalRoom implements RoomHost {
   names(): string[] { return this.room.names(); }
 
   join(name: string, conn: Conn, character: unknown): JoinResult {
-    const save = character === undefined ? undefined : sanitizeCharacter(character);
+    let save;
+    try {
+      save = character === undefined ? undefined : sanitizeCharacter(character);
+    } catch (err) {
+      console.warn('Could not read character save', err);
+      return { error: 'Your saved balance could not be read. Please try joining again.' };
+    }
     if (save === null) return { error: 'That character could not be read.' };
     const res = this.room.join(name, conn, save);
     return typeof res === 'string' ? { error: res } : { seat: res };

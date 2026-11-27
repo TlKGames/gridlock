@@ -2,6 +2,7 @@
 // server only checks what it's handed is sane before playing it, and sends progress back.
 import { CALLERS, type CharacterLast, type CharacterProgress, type CharacterSave, CRIMES, cleanLook, cleanName, FRIENDS, GANGS, PALETTE, UNIVERSE, VEHICLES } from '../shared/packs';
 import { MAP_SIZE } from '../shared/world/cityTypes';
+import { recoverCrapsWallet } from './persist';
 import type { Player } from './game/entities';
 
 const MAX_CASH = 1_000_000_000;
@@ -30,10 +31,11 @@ export function sanitizeCharacter(raw: unknown): CharacterSave | null {
   // Unknown vehicle types are dropped, not clamped (clamping would hand out a real car).
   const garage = (Array.isArray(c.garage) ? c.garage : []).map(Number)
     .filter((v) => Number.isInteger(v) && v >= 0 && v < VEHICLES.length).slice(0, MAX_CARS);
+  const wallet = recoverCrapsWallet(id, c.crapsReceipt);
   return {
     id, universe: UNIVERSE.id, name, look: cleanLook(c.look),
     created: int(c.created, 0, 8.64e15), lastPlayed: int(c.lastPlayed, 0, 8.64e15),
-    cash: int(c.cash, 0, MAX_CASH), bank: int(c.bank, 0, MAX_CASH), garage,
+    cash: int(wallet?.cash ?? c.cash, 0, MAX_CASH), bank: int(wallet?.bank ?? c.bank, 0, MAX_CASH), garage,
     felonies: tally(c.felonies, Object.keys(CRIMES), 0, 1_000_000),
     deaths: int(c.deaths, 0, 1_000_000),
     respect: tally(c.respect, GANGS, -100, 100),
