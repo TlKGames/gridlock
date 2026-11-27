@@ -7,7 +7,8 @@ import type { Part } from '../../shared/packs/types';
 
 /** An open speedboat: low hull, windscreen, two seats in the cockpit, an outboard on the transom. */
 export const speedboat = (): Part[] => [
-  p([[-0.5, 0.0], [0.22, 0.0], [0.5, 0.42], [0.5, 0.52], [-0.5, 0.52]], -0.5, 0.5, 'body'),
+  // The extrusion bevel raises the hull top. Keep it inside the white gunwale.
+  p([[-0.5, 0.0], [0.22, 0.0], [0.5, 0.42], [0.5, 0.50], [-0.5, 0.50]], -0.5, 0.5, 'body'),
   b(-0.5, 0.48, -0.5, 0.5, 0.52, 0.56, 'white'),            // gunwale
   b(-0.42, 0.06, -0.4, 0.4, 0.53, 0.58, '#2b2f34'),         // cockpit sole
   b(0.08, 0.14, -0.42, 0.42, 0.56, 0.86, 'glass'),          // windscreen
