@@ -59,6 +59,23 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
     rect(X0, r.y0, X1, r.y1, WATER);
   }
 
+  // Perpendicular joints span each path. Anchor them to the shore so adjacent chunks agree.
+  for (const w of map.shore.walks) {
+    if (!inView(w.x0, w.y0, w.x1, w.y1)) continue;
+    rect(w.x0, w.y0, w.x1, w.y1, WORLD.modern ? '#a7a398' : '#a89575');
+    if (!WORLD.modern) continue; // A dirt footpath follows the bank in open country.
+    const horizontal = w.x1 - w.x0 > w.y1 - w.y0;
+    const start = horizontal ? w.x0 : w.y0, end = horizontal ? w.x1 : w.y1;
+    const pitch = (end - start) / Math.max(1, Math.round((end - start) / 3));
+    const first = Math.max(1, Math.floor(((horizontal ? X0 : Y0) - start) / pitch));
+    for (let i = first; start + i * pitch < Math.min(end - 0.01, (horizontal ? X1 : Y1) + 0.1); i++) {
+      const t = start + i * pitch;
+      if (horizontal) rect(t, w.y0, t + 0.08, w.y1, '#898579');
+      else rect(w.x0, t, w.x1, t + 0.08, '#898579');
+    }
+  }
+  for (const p of city.ponds) if (inView(p.x0, p.y0, p.x1, p.y1)) rect(p.x0, p.y0, p.x1, p.y1, WATER);
+
   // A railway's own corridor (world/corridors.ts): a paved alley under the viaduct.
   for (const [lines, v] of [[city.xs, true], [city.ys, false]] as const) {
     for (const l of lines) {
@@ -104,12 +121,6 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
     else if (z.busy) boardwalk(ctx, br); // a town's plank walks; elsewhere bare ground
 
     for (const li of b.lots) paintLot(ctx, city.lots[li], z.ground);
-  }
-  // Ponds, with a muddy shore.
-  for (const p of city.ponds) {
-    if (!inView(p.x0 - 2, p.y0 - 2, p.x1 + 2, p.y1 + 2)) continue;
-    rect(p.x0 - 1.4, p.y0 - 1.4, p.x1 + 1.4, p.y1 + 1.4, '#6a5a44');
-    rect(p.x0, p.y0, p.x1, p.y1, WATER);
   }
 
   yield;

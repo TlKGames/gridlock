@@ -2,6 +2,7 @@
 // (WildSpec.brush), thickest down in the washes and thin on the tops. Scattered per ground chunk
 // from the world seed, so every client sees the same bushes; built and dropped with the chunk.
 import * as THREE from 'three';
+import { rectContains } from '../../shared/math';
 import { ZONES } from '../../shared/packs';
 import { Rng } from '../../shared/rng';
 import type { CityMap } from '../../shared/world/city';
@@ -72,6 +73,7 @@ export function buildBrush(scene: THREE.Scene, map: CityMap, X0: number, Y0: num
         const x = cx + rng.next() * CELL, y = cy + rng.next() * CELL;
         const s = rng.range(b.size[0], b.size[1]), color = rng.pick(b.colors), rot = rng.next() * 6.28;
         if (map.onRoad(x, y) || map.isWater(x, y)) continue;
+        if (map.shore.walks.some(w => rectContains(w, x, y, s / 2))) continue;
         // Not on a cliff face (world/terrain.ts).
         if (Math.abs(groundAt(x + 0.6, y) - groundAt(x - 0.6, y)) + Math.abs(groundAt(x, y + 0.6) - groundAt(x, y - 0.6)) > 1.2) continue;
         if (rocksNear(map, x, y).some((r) => (r.x - x) ** 2 + (r.y - y) ** 2 < (r.r + s * 0.5) ** 2)) continue;

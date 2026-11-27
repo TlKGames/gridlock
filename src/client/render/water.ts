@@ -4,7 +4,7 @@ import { OverheadFade } from './overheadFade';
 import type { Rect } from '../../shared/math';
 import { Rng } from '../../shared/rng';
 import type { CityMap } from '../../shared/world/city';
-import { LAND0, LAND1, LANE_W } from '../../shared/world/cityTypes';
+import { LANE_W } from '../../shared/world/cityTypes';
 import { WORLD } from '../../shared/world/worldSpec';
 import { Batch, lambert, UNIT } from './instancing';
 
@@ -81,16 +81,29 @@ export class Water {
       m.receiveShadow = true;
       scene.add(m);
     };
-    const far = 6000, e = 1.5;
+    const far = 6000, { lo, hi } = map.shore;
     if (map.city.edge === 'sea') {
-      plane(-far, -far, far, LAND0 - e);
-      plane(-far, LAND1 + e, far, far);
-      plane(-far, LAND0 - e, LAND0 - e, LAND1 + e);
-      plane(LAND1 + e, LAND0 - e, far, LAND1 + e);
+      plane(-far, -far, far, lo);
+      plane(-far, hi, far, far);
+      plane(-far, lo, lo, hi);
+      plane(hi, lo, far, hi);
     }
     const r = map.river;
-    if (r) plane(LAND0, r.y0, LAND1, r.y1);
+    if (r) plane(lo, r.y0, hi, r.y1);
     for (const p of map.city.ponds) plane(p.x0, p.y0, p.x1, p.y1);
+    const timber = new Batch(UNIT.box(), lambert());
+    for (const d of map.docks) {
+      const w = d.x1 - d.x0, h = d.y1 - d.y0, cx = (d.x0 + d.x1) / 2, cy = (d.y0 + d.y1) / 2;
+      const horizontal = w > h, count = Math.round(Math.max(w, h) / 0.35);
+      for (let i = 0; i < count; i++) {
+        const t = (i + 0.5) / count;
+        timber.add(horizontal ? d.x0 + t * w : cx, 0.05, horizontal ? cy : d.y0 + t * h,
+          horizontal ? w / count - 0.02 : w, 0.12, horizontal ? h : h / count - 0.02, ['#967552', '#886a4c', '#907153'][i % 3]);
+      }
+      for (const x of [d.x0 + 0.18, d.x1 - 0.18]) for (const y of [d.y0 + 0.18, d.y1 - 0.18])
+        timber.add(x, 0, y, 0.24, 0.4, 0.24, '#584431');
+    }
+    timber.build(scene);
     if (r) this.bridges(scene, map, r);
   }
 

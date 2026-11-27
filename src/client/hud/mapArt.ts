@@ -3,7 +3,7 @@
 import { FACTIONS, FIXTURES, ZONES } from '../../shared/packs';
 import { fixtureRect } from '../../shared/world/fixtures';
 import type { CityMap } from '../../shared/world/city';
-import { LAND0, LAND1, MAP_SIZE } from '../../shared/world/cityTypes';
+import { MAP_SIZE } from '../../shared/world/cityTypes';
 import { turfGang } from '../../shared/world/gangTurf';
 
 export const MAP_COLORS = { water: '#0e2431', land: '#15181d', road: '#3a404a', arterial: '#4b525e', rock: '#3a2a22', rail: '#8f96a3', station: '#d8dde6' };
@@ -39,9 +39,12 @@ export function bakeCityMap(map: CityMap, scale: number): HTMLCanvasElement {
   ctx.save();
   ctx.scale(scale, scale);
   ctx.fillStyle = MAP_COLORS.land;
-  ctx.fillRect(LAND0, LAND0, LAND1 - LAND0, LAND1 - LAND0);
+  const { lo, hi } = map.shore;
+  ctx.fillRect(lo, lo, hi - lo, hi - lo);
   ctx.fillStyle = MAP_COLORS.water;
   if (map.river) ctx.fillRect(0, map.river.y0, MAP_SIZE, map.river.y1 - map.river.y0);
+  ctx.fillStyle = '#79634c';
+  for (const d of map.docks) ctx.fillRect(d.x0, d.y0, d.x1 - d.x0, d.y1 - d.y0);
   for (const b of city.blocks) {
     ctx.fillStyle = mix(ZONES[b.zone].mapColor, MAP_COLORS.land, 0.4);
     ctx.fillRect(b.rect.x0, b.rect.y0, b.rect.x1 - b.rect.x0, b.rect.y1 - b.rect.y0);

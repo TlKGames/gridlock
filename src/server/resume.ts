@@ -2,7 +2,6 @@
 // joining any room (every room is the same city) they're put back there, in that vehicle.
 import { type CharacterLast, PALETTE, VEHICLES } from '../shared/packs';
 import { Mode } from '../shared/protocol';
-import { LAND0, LAND1 } from '../shared/world/cityTypes';
 import { groundOf } from '../shared/world/levels';
 import type { Ped, Player } from './game/entities';
 import { seatPed, spawnVehicle } from './game/factory';
@@ -12,7 +11,8 @@ import type { World } from './game/world';
 export function resumeSpot(w: World, last: CharacterLast | undefined): CharacterLast | null {
   if (!last) return null;
   const { x, y } = last;
-  if (!(x > LAND0 && x < LAND1 && y > LAND0 && y < LAND1) || w.map.isWater(x, y)) return null;
+  const { lo, hi } = w.map.shore;
+  if ((!(x >= lo && x <= hi && y >= lo && y <= hi) && !w.map.onDock(x, y)) || w.map.isWater(x, y)) return null;
   let inside = false;
   w.statics.near(x - 0.5, y - 0.5, x + 0.5, y + 0.5, (b) => { if (b.h > 0.5 && x > b.x0 && x < b.x1 && y > b.y0 && y < b.y1) inside = true; });
   return inside ? null : last;

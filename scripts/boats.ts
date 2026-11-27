@@ -9,6 +9,8 @@ const { RULES, VEHICLES, vehicleIndex } = await import('../src/shared/packs');
 const { BTN, Mode } = await import('../src/shared/protocol');
 const { seatPed, spawnVehicle } = await import('../src/server/game/factory');
 const { mooredBoats } = await import('../src/server/game/systems/moorings');
+const { DOCK_DEPTH, moorings } = await import('../src/shared/world/moorings');
+const { Breakables } = await import('../src/shared/world/breakables');
 const { afloat } = await import('../src/shared/sim/boat');
 
 let failures = 0;
@@ -37,7 +39,16 @@ check(moored.every((m) => afloat({ x: m.x, y: m.y, angle: m.angle, vx: 0, vy: 0,
 // Walk up to one on the river and the boat is there when you arrive.
 const river = w.map.river!; // Bayhaven has its river
 const m = moored.find((q) => q.y > river.y0 - 5 && q.y < river.y1 + 5)!;
-const bankY = m.y < (river.y0 + river.y1) / 2 ? river.y0 - 1.2 : river.y1 + 1.2;
+const sign = m.y < (river.y0 + river.y1) / 2 ? 1 : -1;
+const bankY = (sign > 0 ? river.y0 : river.y1) + sign * (DOCK_DEPTH - 0.45);
+check(new Breakables(w.city).list.every(p => !w.map.isWater(p.x, p.y)), 'all street furniture stands on dry ground');
+check(moorings(w.city).every(site => {
+  for (let d = -0.4; d < DOCK_DEPTH; d += 0.25) {
+    const x = site.x + site.nx * d, y = site.y + site.ny * d;
+    if (w.map.isWater(x, y) || w.statics.boatWater(x, y)) return false;
+  }
+  return true;
+}), 'all docks connect to dry land and exclude hulls across their decks');
 p.body.x = m.x; p.body.y = bankY + (m.y < (river.y0 + river.y1) / 2 ? -80 : 80);
 drive(40);
 p.body.x = m.x; p.body.y = bankY;

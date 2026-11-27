@@ -1,7 +1,10 @@
 // Static collision world: axis-aligned boxes (buildings, containers, fences) and tree trunks,
 // bucketed in a uniform grid. Used by server physics and client-side prediction alike.
+import { dockRect, moorings } from './moorings';
+import { waterfront } from './waterfront';
+import { rectContains } from '../math';
 import type { City } from './cityTypes';
-import { LAND0, LAND1, MAP_SIZE } from './cityTypes';
+import { MAP_SIZE } from './cityTypes';
 import { FIXTURES } from '../packs';
 import { fixtureRect, ringSides } from './fixtures';
 import { FLAT_PROPS } from './interiors';
@@ -39,11 +42,8 @@ export class StaticWorld {
 
   constructor(city: City) {
     this.terrain = city.terrain;
-    const r = city.riverRow;
-    if (r >= 0) {
-      this.riverY0 = city.ys[r].pos + city.ys[r].width / 2;
-      this.riverY1 = city.ys[r + 1].pos - city.ys[r + 1].width / 2;
-    }
+    this.shore = waterfront(city);
+    this.docks = moorings(city).map(dockRect);
     this.sea = city.edge === 'sea';
     this.ponds = city.ponds;
     // Walk-in buildings: their room's walls (with the door gap), furniture and the solid rest,
@@ -99,10 +99,9 @@ export class StaticWorld {
     });
   }
 
-  /** The river's banks (y; none: 0, 0), whether sea lies round the land, the ponds: set in the
-   *  constructor. */
-  private riverY0 = 0;
-  private riverY1 = 0;
+  /** The same banks and timber decks used by pedestrian movement and rendering. */
+  private shore: ReturnType<typeof waterfront>;
+  private docks: ReturnType<typeof dockRect>[];
   private sea = true;
   private ponds: { x0: number; y0: number; x1: number; y1: number }[] = [];
 
@@ -110,8 +109,10 @@ export class StaticWorld {
    *  boat goes under the deck: from above, the bridge hides it), and ponds. Upper-floor strips are dry. */
   boatWater(x: number, y: number): boolean {
     if (x >= MAP_SIZE || y >= MAP_SIZE || x < -SEA_MARGIN || y < -SEA_MARGIN) return false; // the edge of the world
-    if (x < LAND0 || x > LAND1 || y < LAND0 || y > LAND1) return this.sea;
-    if (y > this.riverY0 && y < this.riverY1) return true;
+    const { lo, hi, river } = this.shore;
+    const outside = x < lo || x > hi || y < lo || y > hi;
+    if (outside || (river && y > river.y0 && y < river.y1))
+      return (!outside || this.sea) && !this.docks.some(d => rectContains(d, x, y));
     return this.ponds.some((p) => x > p.x0 && x < p.x1 && y > p.y0 && y < p.y1);
   }
 

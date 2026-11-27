@@ -97,7 +97,10 @@ export function* paintRelief(ctx: CanvasRenderingContext2D, map: CityMap, X0: nu
       if (L) {
         const q = (j + M) * L.n + i + M;
         if (L.water[q]) c = mix(RIVER, RIVER_DEEP, drift);
-        else {
+        else if (L.water[q - 2] || L.water[q + 2] || L.water[q - 2 * L.n] || L.water[q + 2 * L.n]) {
+          // Follow the irregular gorge banks with a packed-earth footpath.
+          c = [165, 147, 116];
+        } else {
           // By true depth and height, so a gorge or plateau fading out leaves no tint behind.
           if (L.cut[q] > 0.3) c = mix(c, l.low, Math.min(1, L.cut[q] / 3) * 0.7);
           if (L.rise[q] > 1) c = mix(c, l.high, Math.min(1, (L.rise[q] - 1) / 6) * 0.32);

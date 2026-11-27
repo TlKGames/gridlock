@@ -1,5 +1,7 @@
 // City assembly plus spatial lookups used by physics, AI and rendering.
-import type { Rect } from '../math';
+import { dockRect, moorings } from './moorings';
+import { waterfront } from './waterfront';
+import { rectContains, type Rect } from '../math';
 import { Rng } from '../rng';
 import { type Block, type City, LAND0, LAND1, MAP_SIZE, type ParkSpot, type RoadNode, type Segment } from './cityTypes';
 import { WORLD } from './worldSpec';
@@ -82,6 +84,7 @@ export function generateCity(seed: number): City {
   city.interiors = interiorsOf(city);
   for (const i of city.interiors) i.place.counter = { x: i.counter.x, y: i.counter.y };
   const map = new CityMap(city);
+  city.trees = city.trees.filter(tree => !map.shore.walks.some(w => rectContains(w, tree.x, tree.y, 0.5)));
   // The ground's height in open country (world/terrain.ts), when the universe has hills: nothing
   // left standing on a cliff face or in a river.
   const terrain = buildTerrain(city, map);
@@ -109,11 +112,15 @@ export class CityMap {
   /** The river between its banks (null: no river). */
   readonly river: Rect | null;
 
+  readonly shore: ReturnType<typeof waterfront>;
+  readonly docks: Rect[];
+
   constructor(readonly city: City) {
     this.nx = city.xs.length - 1;
     this.ny = city.ys.length - 1;
-    const r = city.riverRow;
-    this.river = r < 0 ? null : { x0: 0, x1: MAP_SIZE * 2, y0: city.ys[r].pos + city.ys[r].width / 2, y1: city.ys[r + 1].pos - city.ys[r + 1].width / 2 };
+    this.shore = waterfront(city);
+    this.river = this.shore.river;
+    this.docks = moorings(city).map(dockRect);
   }
 
   cellAt(x: number, y: number): number {
@@ -148,16 +155,18 @@ export class CityMap {
 
   isWater(x: number, y: number): boolean {
     if (x >= LEVEL_BAND) return false; // an upper floor: dry
-    if (x < LAND0 || x > LAND1 || y < LAND0 || y > LAND1) return this.city.edge === 'sea';
+    if (x < this.shore.lo || x > this.shore.hi || y < this.shore.lo || y > this.shore.hi) return this.city.edge === 'sea' && !this.onDock(x, y);
     const r = this.river;
     if (r && y > r.y0 && y < r.y1) {
       for (const b of this.city.bridges) if (x >= b.x0 && x <= b.x1) return false;
-      return true;
+      return !this.onDock(x, y);
     }
     for (const p of this.city.ponds) if (x > p.x0 && x < p.x1 && y > p.y0 && y < p.y1) return true;
     // A river down a gorge's floor (world/terrain.ts).
     return !!this.city.terrain && groundOf(this.city.terrain, x, y).water;
   }
+
+  onDock(x: number, y: number): boolean { return this.docks.some(d => rectContains(d, x, y)); }
 
   /** True when (x,y) lies on a road surface (not sidewalk/lot). */
   onRoad(x: number, y: number): boolean {
