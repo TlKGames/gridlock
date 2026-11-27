@@ -5,7 +5,7 @@ import type { CityMap } from '../../shared/world/city';
 import { LAND0, LAND1, LANE_W, MAP_SIZE, type Segment } from '../../shared/world/cityTypes';
 import { WORLD } from '../../shared/world/worldSpec';
 import { hasWild, paintRelief } from './groundRelief';
-import { boardwalk, grid, paintLot } from './lotPaint';
+import { boardwalk, paintLot, sidewalk } from './lotPaint';
 
 // Keep full-detail texture uploads at 512 × 512 as the camera crosses the city.
 export const CHUNK = 64;
@@ -100,13 +100,8 @@ export function* paintChunk(map: CityMap, cx: number, cy: number, canvas: HTMLCa
     const z = ZONES[b.zone];
     if (z.layout === 'wild') continue; // painted by the lie of the land, above
     rect(br.x0, br.y0, br.x1, br.y1, z.sidewalk);
-    if (WORLD.modern) {
-      grid(ctx, { x0: br.x0 + 0.4, y0: br.y0 + 0.4, x1: br.x1 - 0.4, y1: br.y1 - 0.4 }, 1.5, 'rgba(0,0,0,0.08)');
-      // Curb edge.
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-      ctx.lineWidth = 0.25;
-      ctx.strokeRect(br.x0 + 0.12, br.y0 + 0.12, br.x1 - br.x0 - 0.24, br.y1 - br.y0 - 0.24);
-    } else if (z.busy) boardwalk(ctx, br); // a town's plank walks; elsewhere bare ground
+    if (WORLD.modern) sidewalk(ctx, br);
+    else if (z.busy) boardwalk(ctx, br); // a town's plank walks; elsewhere bare ground
 
     for (const li of b.lots) paintLot(ctx, city.lots[li], z.ground);
   }

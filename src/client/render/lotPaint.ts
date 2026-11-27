@@ -40,7 +40,7 @@ export function paintLot(ctx: CanvasRenderingContext2D, lot: Lot, ground: string
     }
     case 'yard': if (WORLD.modern) { paintDriveway(ctx, lot); backyard(ctx, lot); } else homestead(ctx, lot, ground); break;
     // An older era's yards and squares are packed earth, not paving.
-    case 'plaza': if (WORLD.modern) { fill('#a29d92'); grid(ctx, r, 3, 'rgba(0,0,0,0.08)'); } else fill('#b09a72'); break;
+    case 'plaza': if (WORLD.modern) { fill('#a29d92'); slabJoints(ctx, r, 3); } else fill('#b09a72'); break;
     case 'parking': fill(WORLD.modern ? '#45484d' : '#a8906a'); break;
     case 'containers': fill('#6f6c66'); break;
     case 'pad': {
@@ -61,13 +61,34 @@ export function paintLot(ctx: CanvasRenderingContext2D, lot: Lot, ground: string
   }
 }
 
-export function grid(ctx: CanvasRenderingContext2D, r: R, step: number, c: string): void {
-  ctx.strokeStyle = c;
-  ctx.lineWidth = 0.15;
+// Lay out whole panels in world coordinates so adjacent streamed chunks share their joints.
+// A sidewalk reserves one full-width panel at either end, forming square corner slabs.
+function slabJoints(ctx: CanvasRenderingContext2D, r: R, target: number, corners = false): void {
+  const cuts = (lo: number, hi: number, joint: (at: number) => void) => {
+    if (corners && hi - lo >= 3 * target) {
+      lo += target;
+      hi -= target;
+      joint(lo);
+      joint(hi);
+    }
+    const panels = Math.max(1, Math.round((hi - lo) / target));
+    for (let i = 1; i < panels; i++) joint(lo + (hi - lo) * i / panels);
+  };
   ctx.beginPath();
-  for (let x = r.x0; x <= r.x1; x += step) { ctx.moveTo(x, r.y0); ctx.lineTo(x, r.y1); }
-  for (let y = r.y0; y <= r.y1; y += step) { ctx.moveTo(r.x0, y); ctx.lineTo(r.x1, y); }
+  cuts(r.x0, r.x1, x => { ctx.moveTo(x, r.y0); ctx.lineTo(x, r.y1); });
+  cuts(r.y0, r.y1, y => { ctx.moveTo(r.x0, y); ctx.lineTo(r.x1, y); });
+  ctx.strokeStyle = 'rgba(0,0,0,0.12)';
+  ctx.lineWidth = 0.10;
   ctx.stroke();
+}
+
+export function sidewalk(ctx: CanvasRenderingContext2D, r: R): void {
+  const curb = 0.25;
+  const slabs = { x0: r.x0 + curb, y0: r.y0 + curb, x1: r.x1 - curb, y1: r.y1 - curb };
+  slabJoints(ctx, slabs, SIDEWALK_W - curb, true);
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = curb;
+  ctx.strokeRect(r.x0 + curb / 2, r.y0 + curb / 2, r.x1 - r.x0 - curb, r.y1 - r.y0 - curb);
 }
 
 function paintDriveway(ctx: CanvasRenderingContext2D, lot: Lot): void {
