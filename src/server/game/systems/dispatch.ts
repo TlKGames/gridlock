@@ -10,6 +10,9 @@ import { seatPed, spawnPed, spawnVehicle } from '../factory';
 import type { World } from '../world';
 import { laneSpawn } from './spawnPoints';
 
+// Bound a stalled response so a still-active incident can request a fresh crew.
+const SERVICE_TIMEOUT = 180;
+
 export class Dispatch {
   private timer = 0;
   private lastSpawn = new Map<number, number>();
@@ -91,45 +94,43 @@ export class Dispatch {
     }
   }
 
-  private countKey(key: string): number {
-    let n = 0;
-    for (const s of this.w.squads.values()) if (s.key === key) n++;
-    return n;
-  }
-
   private medics(): void {
-    const w = this.w;
-    const call = SERVICE_CALLS.medic;
+    const w = this.w, call = SERVICE_CALLS.medic;
+    const assigned = new Set<number>();
+    for (const s of w.squads.values()) if (s.key === 'medic' && s.incident) assigned.add(s.incident.target);
     for (const p of w.peds.values()) {
-      if (this.countKey('medic') >= call.maxActive) return;
-      if (!p.dead || p.player || p.bodyCalled || p.deadT < 3 || p.revived) continue;
-      if (w.nearestPlayerDist2(p.body.x, p.body.y) > 150 * 150) continue;
-      p.bodyCalled = true;
-      const pos = { x: p.body.x, y: p.body.y };
-      this.spawnSquad(call.squad, 'medic', 0, pos, (d) => setTask(w.peds.get(d)!, 'respond', p.id, pos.x, pos.y));
+      if (assigned.size >= call.maxActive) return;
+      if (!p.dead || p.player || p.deadT < 3 || p.revived || assigned.has(p.id)) continue;
+      const { x, y } = p.body;
+      if (w.nearestPlayerDist2(x, y) > 150 * 150) continue;
+      const squad = this.spawnSquad(call.squad, 'medic', 0, p.body, (d) => setTask(w.peds.get(d)!, 'respond', p.id, x, y));
+      if (squad) {
+        squad.incident = { target: p.id, x, y, expires: w.time + SERVICE_TIMEOUT };
+        assigned.add(p.id);
+      }
     }
   }
 
   private fireCrews(): void {
-    const w = this.w;
-    const call = SERVICE_CALLS.fire;
-    const send = (x: number, y: number) => {
-      if (this.countKey('fire') >= call.maxActive) return false;
-      if (w.nearestPlayerDist2(x, y) > 150 * 150) return false;
-      this.spawnSquad(call.squad, 'fire', 0, { x, y }, (d) => setTask(w.peds.get(d)!, 'respond', 0, x, y));
-      return true;
+    const w = this.w, call = SERVICE_CALLS.fire;
+    const active = [...w.squads.values()].filter(s => s.key === 'fire' && s.incident);
+    const send = (target: number, x: number, y: number) => {
+      if (w.nearestPlayerDist2(x, y) > 150 * 150) return;
+      // Firefighters search within 25 metres of their assigned location.
+      if (active.some(s => s.incident!.target === target || dist2(x, y, s.incident!.x, s.incident!.y) < 25 * 25)) return;
+      const squad = this.spawnSquad(call.squad, 'fire', 0, { x, y }, (d) => setTask(w.peds.get(d)!, 'respond', 0, x, y));
+      if (squad) {
+        squad.incident = { target, x, y, expires: w.time + SERVICE_TIMEOUT };
+        active.push(squad);
+      }
     };
     for (const f of w.fires.values()) {
-      if (f.called || f.life < 4) continue;
-      f.called = true;
-      // One truck covers nearby fires.
-      for (const o of w.fires.values()) if (dist2(o.x, o.y, f.x, f.y) < 30 * 30) o.called = true;
-      if (!send(f.x, f.y)) return;
+      if (active.length >= call.maxActive) return;
+      if (f.life >= 4) send(f.id, f.x, f.y);
     }
     for (const v of w.vehicles.values()) {
-      if (v.burning < 0 || v.fireCalled) continue;
-      v.fireCalled = true;
-      if (!send(v.body.x, v.body.y)) return;
+      if (active.length >= call.maxActive) return;
+      if (v.burning >= 0) send(v.id, v.body.x, v.body.y);
     }
   }
 
@@ -141,26 +142,24 @@ export class Dispatch {
       const v = w.vehicles.get(s.vehicle);
       const pl = s.player ? w.players.get(s.player) : undefined;
       const standDown = s.player !== 0 && (!pl || pl.wanted === 0 || pl.mode >= Mode.Dead);
-      const gone = !alive.length && (!v || v.wrecked);
-      const serviceDone = s.player === 0 && servicesDone(w, s);
+      const gone = !alive.length;
+      const timedOut = s.incident && w.time >= s.incident.expires;
+      const serviceDone = s.incident && (timedOut || !alive.some(id => {
+        const task = w.peds.get(id)?.ai?.task;
+        return task === 'respond' || task === 'revive' || task === 'extinguish';
+      }));
       if (!gone && !standDown && !serviceDone) continue;
       for (const id of s.members) {
         const p = w.peds.get(id);
         if (!p) continue;
         p.persistent = false;
-        if (p.ai && !p.dead) {
+        if (p.ai) {
           p.ai.squad = 0;
-          if (standDown) BEHAVIOURS[p.spec.behaviour].idle(w, p);
+          if (!p.dead && (standDown || timedOut)) BEHAVIOURS[p.spec.behaviour].idle(w, p);
         }
       }
       if (v) { v.persistent = false; v.siren = false; }
       w.squads.delete(s.id);
     }
   }
-}
-
-/** A service squad is done once its crew is back aboard and driving. */
-function servicesDone(w: World, s: Squad): boolean {
-  const driver = w.peds.get(s.members[0]);
-  return !!driver && driver.vehicle === s.vehicle && driver.ai?.task === 'drive';
 }

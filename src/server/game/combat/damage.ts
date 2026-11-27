@@ -188,5 +188,5 @@ export function explode(w: World, x: number, y: number, radius: number, dmg: num
 export function spawnFire(w: World, x: number, y: number, r: number, life: number, owner: number): void {
   if (w.fires.size > 60 || w.map.isWater(x, y)) return;
   const id = w.id();
-  w.fires.set(id, { id, kind: 'fire', x, y, r, life, owner, called: false });
+  w.fires.set(id, { id, kind: 'fire', x, y, r, life, owner });
 }

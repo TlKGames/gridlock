@@ -72,7 +72,6 @@ export interface Ped {
   lastHitBy: number; lastHitT: number;
   persistent: boolean;
   revived: boolean;
-  bodyCalled: boolean;
   swimT: number;
   jumpT: number;            // seconds left in a hop (GTA2 jump)
 }
@@ -99,7 +98,6 @@ export interface Vehicle {
   idleT: number;
   spot: number;             // parking/fixed spot key that spawned it, -1 none
   stolenBy: number;         // player id who stole it (for chop shop)
-  fireCalled: boolean;
   horn: boolean;
   /** Its radio's station once someone riding in it retunes it (-1 off); until then the station
    *  it came tuned to (picked on the client from its id). */
@@ -149,7 +147,6 @@ export interface Fire {
   x: number; y: number; r: number;
   life: number;
   owner: number;
-  called: boolean;
 }
 
 export interface Player {
@@ -241,6 +238,7 @@ export interface Squad {
   key: string;              // which wanted-level squad slot it fills
   vehicle: number;
   members: number[];
+  incident?: { target: number; x: number; y: number; expires: number };
 }
 
 export type Entity = Ped | Vehicle | Projectile | Pickup | Fire;

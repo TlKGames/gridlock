@@ -186,8 +186,7 @@ export function revive(w: World, p: Ped, dt: number): boolean {
   body.dead = false;
   body.hp = body.spec.hp * 0.5;
   body.revived = true;
-  body.bodyCalled = false;
-  if (body.ai) { body.ai.block = -1; setTask(body, 'wander'); }
+  if (body.ai) { body.ai.block = -1; setTask(body, body.ai.post ? 'stand' : 'wander'); }
   return true;
 }
 

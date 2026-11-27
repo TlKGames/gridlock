@@ -25,7 +25,7 @@ export function spawnPed(w: World, arch: number, x: number, y: number, angle = 0
     weapons, wi: weapons.length - 1, fireCd: 0, reloadT: 0, trigger: false, triggerPrev: false, aim: angle,
     cash: Math.round(w.rng.range(spec.cash[0], spec.cash[1])),
     vehicle: 0, seat: -1, player: null, ai: withAi ? newAi() : null,
-    lastHitBy: 0, lastHitT: -99, persistent: false, revived: false, bodyCalled: false, swimT: 0, jumpT: 0,
+    lastHitBy: 0, lastHitT: -99, persistent: false, revived: false, swimT: 0, jumpT: 0,
   };
   w.peds.set(p.id, p);
   return p;
@@ -54,7 +54,7 @@ export function spawnVehicle(w: World, type: number, x: number, y: number, angle
     hp: spec.hp, burning: -1, wrecked: false, wreckT: 0,
     seats: new Array(Math.max(1, spec.seats)).fill(0),
     siren: false, turret: angle, fireCd: 0, vw: 0, owner: 0, persistent: false, sinkT: 0, idleT: 0, spot: -1,
-    stolenBy: 0, fireCalled: false, horn: false, trailer: angle, dents: [0, 0, 0, 0],
+    stolenBy: 0, horn: false, trailer: angle, dents: [0, 0, 0, 0],
     stamina: spec.stamina?.gallop ?? 0, blown: false, calledBy: 0, rearT: 0, boltT: 0, boltX: 0, boltY: 0,
   };
   w.vehicles.set(v.id, v);

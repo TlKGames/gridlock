@@ -265,7 +265,13 @@ export class Population {
     for (const g of this.guards) {
       const near = w.nearestPlayerDist2(g.x, g.y);
       const p = g.ped ? w.peds.get(g.ped) : undefined;
-      if (p && p.dead) { g.ped = 0; g.readyAt = w.time + 120; continue; }
+      if (p?.dead) {
+        // Keep the post assigned while medics can bring its occupant back.
+        g.readyAt = w.time + Math.max(0, 120 - p.deadT);
+        if (p.deadT < 120 && near <= 300 * 300) continue;
+        removePed(w, p);
+        g.ped = 0;
+      }
       if (!p) g.ped = 0;
       if (p && near > 300 * 300) { removePed(w, p); g.ped = 0; continue; }
       if (!g.ped && near < 220 * 220 && (g.indoor || near > 60 * 60) && w.time >= g.readyAt) {
