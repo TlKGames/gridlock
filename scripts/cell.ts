@@ -111,6 +111,38 @@ k = msgs.length;
 room.cell.answer(loner, true);
 check(said(k).map(([, s]) => s).join() === 'pickup,hello,tip,on_it', 'answered: you pick up, his greeting, he sends you to a payphone, you\'re on it');
 
+// Declining a mentor reminder leaves the actual lead and consumes the repeating idle trigger.
+loner.cell.nudgeAt = 0;
+ticks(2);
+k = msgs.length;
+room.onMessage(loner, { t: 'call', accept: false });
+room.onMessage(loner, { t: 'call', accept: false });
+check(texts(k).filter(t => t.body.startsWith('Payphone in')).length === 1, 'declined reminder texts the location once');
+loner.cell.nudgeAt = 0;
+ticks(2);
+check(!loner.cell.ringing && !loner.mission, 'declining clears the idle reminder without accepting work');
+
+// A newcomer who declines gets the welcome as a text and keeps the contact across a rejoin.
+const { sanitizeCharacter } = await import('../src/server/characters');
+const fresh = sanitizeCharacter({ id: 'cell03', universe: 'bayhaven', name: 'Newcomer' })!;
+const peer = { send: (d: string) => msgs.push(JSON.parse(d)), close: () => {} };
+const newcomer = room.join(fresh.name, peer, fresh);
+if (typeof newcomer === 'string') throw new Error(newcomer);
+newcomer.cell.introAt = 0;
+ticks(2);
+k = msgs.length;
+room.onMessage(newcomer, { t: 'call', accept: false });
+check(texts(k).some(t => t.from === 'Benny' && t.body.includes('payphones') && t.body.includes('chop shop')), 'declined welcome summarizes the work and chop shop');
+const saved = since(k).find(m => m.t === 'save')!;
+const restored = sanitizeCharacter({ ...fresh, ...(saved.p as object) })!;
+room.leave(newcomer);
+const back = room.join(fresh.name, peer, restored);
+if (typeof back === 'string') throw new Error(back);
+back.cell.introAt = back.cell.nudgeAt = 0;
+ticks(2);
+check(!back.cell.ringing && room.cell.people(back).includes(mentor), 'rejoining preserves both dismissed triggers and Benny’s number');
+check(room.cell.dial(back, mentor) === null, 'Benny still answers when called');
+
 // Business income reaching the bank at midnight comes with a text from the bank.
 const biz = w.city.properties.find((p) => PROPERTIES[p.spec].kind === 'business' && PROPERTIES[p.spec].income > 0)!;
 room.econ.owners.set(biz.id, pl.ownerKey);

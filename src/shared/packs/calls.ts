@@ -12,6 +12,7 @@ const voiceOf = (dir: string, v: VoiceFile): Voice => ({ model: `${dir}/${v.mode
 
 export interface Caller {
   id: string; name: string; fullName: string; role: string; about: string;
+  welcomeText?: string;
   /** The gang they speak for, if any. */
   crew?: string;
   /** Their folder, from the project root. */
@@ -50,6 +51,7 @@ export const PLAYER_VOICES: { id: string; name: string; who: 'man' | 'woman'; ab
 export let WELCOME_CALLER: string | undefined;
 /** Who rings you about a job for a crew that doesn't trust you with its number yet (the
  *  character marked "mentor"), when they have something to say about it. */
+export const MENTOR_REMINDER_DISMISSED = 'phone:mentor-reminder-dismissed';
 export let MENTOR_CALLER: string | undefined;
 export let DEFAULT_VOICE = '';
 /** The line you say as a demo in the character creator. */
@@ -72,7 +74,7 @@ export function installCalls(u: Universe): void {
   }
   for (const [folder, c] of u.cast) {
     const dir = `${u.contentDir}/characters/${folder}`;
-    CALLERS.push({ id: c.id, name: c.name, fullName: c.fullName, role: c.role, about: c.about, crew: c.crew, dir, voice: c.voice && voiceOf(dir, c.voice) });
+    CALLERS.push({ id: c.id, name: c.name, fullName: c.fullName, role: c.role, about: c.about, crew: c.crew, welcomeText: c.welcomeText, dir, voice: c.voice && voiceOf(dir, c.voice) });
     CALLS[c.id] = Object.fromEntries(Object.entries(c.calls).map(([situation, exchanges]) => [situation, exchanges!.map((turns, x) => {
       let n = 0;
       return turns.map((t): Turn => {

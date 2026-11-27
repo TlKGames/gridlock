@@ -612,6 +612,7 @@ export interface TurnFile { say?: string[]; male?: string[]; female?: string[]; 
 export interface VoiceFile { model: string; exaggeration: number; cfg: number }
 export interface CharacterFile {
   id: string; name: string; fullName: string; role: string; about: string;
+  welcomeText?: string;
   crew?: string; boss?: boolean; welcome?: boolean; mentor?: boolean; contact?: boolean;
   /** Their reference voice; without one their lines are shown, not spoken. */
   voice?: VoiceFile;

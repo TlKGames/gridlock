@@ -12,7 +12,7 @@ import type {
   PropertySpec, RadioStation, RoleCrew, ServiceCall, ServiceSpec, StreetPropSpec, Universe, VehicleSpec, WantedLevel, WeaponPart, WeaponSpec, ZoneSpec,
 } from './types';
 
-export { CALLERS, CALLS, type Caller, type CallSituation, cleanVoice, MENTOR_CALLER, namedClip, PEOPLE_CONTACTS, DEFAULT_VOICE, GANG_CALLERS, genderOf, PLAYER_LINES, PLAYER_SAYS, PLAYER_VOICES, type PlayerSituation, type Turn, type Voice, VOICE_SAMPLE, WELCOME_CALLER, YOU, youLineId } from './calls';
+export { CALLERS, CALLS, type Caller, type CallSituation, cleanVoice, MENTOR_CALLER, MENTOR_REMINDER_DISMISSED, namedClip, PEOPLE_CONTACTS, DEFAULT_VOICE, GANG_CALLERS, genderOf, PLAYER_LINES, PLAYER_SAYS, PLAYER_VOICES, type PlayerSituation, type Turn, type Voice, VOICE_SAMPLE, WELCOME_CALLER, YOU, youLineId } from './calls';
 export { CHARACTER_LOOKS, type CharacterLast, type CharacterProgress, type CharacterSave, type CharLook, cleanLook, cleanName, DEFAULT_LOOK, LOOK_PARTS, type LookPart, MAX_CHARACTERS, NAME_PARTS } from './characters';
 export type { Respect, Rules } from './defaults';
 export type * from './types';

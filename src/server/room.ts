@@ -224,7 +224,10 @@ export class Room {
         break;
       }
       case 'call':
-        if (RULES.cellPhone) this.cell.answer(pl, !!msg.accept);
+        if (RULES.cellPhone && pl.cell.ringing) {
+          this.cell.answer(pl, !!msg.accept);
+          this.sendSave(pl);
+        }
         break;
       case 'talk': {
         const err = faceTalk(this.world, this.missions, pl, Number(msg.ped));

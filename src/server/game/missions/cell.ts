@@ -7,7 +7,7 @@
 // blown jobs) and point you at a payphone that's ringing for you. The mentor also rings with a
 // nudge when you've been idle and no crew has your number; miss it and they leave a voicemail.
 // What callers say is voiced (missions/talk.ts, packs/calls.ts).
-import { CALLERS, CALLS, type CallSituation, GANGS, MENTOR_CALLER, PEOPLE_CONTACTS, RESPECT, WELCOME_CALLER, YOU } from '../../../shared/packs';
+import { CALLERS, CALLS, type CallSituation, GANGS, MENTOR_CALLER, MENTOR_REMINDER_DISMISSED, PEOPLE_CONTACTS, RESPECT, WELCOME_CALLER, YOU } from '../../../shared/packs';
 import { Mode, type S2C } from '../../../shared/protocol';
 import type { Player } from '../entities';
 import type { World } from '../world';
@@ -73,7 +73,7 @@ export class Cell {
       if (WELCOME_CALLER && !pl.met.has(WELCOME_CALLER) && w.time >= c.introAt) { this.ring(pl, WELCOME_CALLER); continue; }
       // No crew has your number yet: the mentor rings now and then to say there's work.
       const m = MENTOR_CALLER;
-      if (m && !contacts.length && pl.met.has(m) && w.time >= c.nudgeAt && has(m, 'nudge') && !this.missions.fedUp(pl) && this.missions.ringingBooth(pl)) {
+      if (m && !contacts.length && pl.met.has(m) && !pl.met.has(MENTOR_REMINDER_DISMISSED) && w.time >= c.nudgeAt && has(m, 'nudge') && !this.missions.fedUp(pl) && this.missions.ringingBooth(pl)) {
         c.nudgeAt = w.time + RESPECT.mentorNudgeAfter;
         this.ring(pl, m);
         continue;
@@ -84,13 +84,19 @@ export class Cell {
   }
 
   /** A call nobody picked up: a person leaves a voicemail (their `voicemail` lines, or else a
-   *  nudge); others leave the missed call. The welcome caller tries again. */
+   *  nudge); others leave the missed call. The welcome text introduces the contact. */
   private missed(pl: Player, who: string): void {
     pl.send({ t: 'call', gang: who, state: 'missed' } satisfies S2C);
-    if (who === WELCOME_CALLER && !pl.met.has(who)) { pl.cell.introAt = this.w.time + 60; textTo(pl, nameOf(who), 'Missed call.'); return; }
+    if (who === WELCOME_CALLER && !pl.met.has(who)) { this.welcomeText(pl, who); return; }
     const parts = PEOPLE_CONTACTS.includes(who) ? pickParts(this.w, pl, [[who, has(who, 'voicemail') ? 'voicemail' : 'nudge']]) : [];
     if (parts.length) pl.send({ t: 'voicemail', from: who, parts } satisfies S2C);
     else textTo(pl, nameOf(who), 'Missed call.');
+  }
+
+  private welcomeText(pl: Player, who: string): void {
+    pl.met.add(who);
+    const summary = CALLERS.find(c => c.id === who)?.welcomeText;
+    textTo(pl, nameOf(who), summary ?? 'Welcome to town. Keep my number and call me for work.');
   }
 
   private ring(pl: Player, who: string): void {
@@ -106,19 +112,21 @@ export class Cell {
     c.ringing = '';
     c.next = w.time + callGap(w);
     pl.send({ t: 'call', gang: g, state: 'end' } satisfies S2C);
+    if (!accept && g === MENTOR_CALLER) pl.met.add(MENTOR_REMINDER_DISMISSED);
     if (g === WELCOME_CALLER && !pl.met.has(g)) {
       if (accept) talk(w, pl, 'cell', [[YOU, 'pickup'], [g, 'intro']]);
-      else c.introAt = w.time + 60;
+      else this.welcomeText(pl, g);
       return null;
     }
     if (PEOPLE_CONTACTS.includes(g)) {
       // You picked up, so no "call me back": he sends you to the payphone that's ringing for you.
+      const booth = this.missions.ringingBooth(pl);
       if (accept) {
-        const booth = this.missions.ringingBooth(pl);
         const tip = !!booth && has(g, 'tip');
         talk(w, pl, 'cell', [[YOU, 'pickup'], [g, 'hello'], [g, tip ? 'tip' : 'nudge'], ...(tip ? [[YOU, 'on_it'] as Part] : [])]);
-        if (booth) textTo(pl, nameOf(g), `Payphone in ${placeName(w, booth.x, booth.y)}. It's ringing for you.`);
       }
+      if (booth) textTo(pl, nameOf(g), `Payphone in ${placeName(w, booth.x, booth.y)}. It's ringing for you.`);
+      else if (!accept) textTo(pl, nameOf(g), "Give me a call when you want work.");
       return null;
     }
     if (!accept) return null;
