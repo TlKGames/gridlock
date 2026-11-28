@@ -4,8 +4,7 @@ import { removePed, seatPed, spawnPed } from './factory';
 import { setTask } from './ai/tasks';
 import { destination, checkpointWalk, indoorSpot, resumeRoute, walkPosition, type Destination } from './ai/commute';
 import type { Ped } from './entities';
-import { Rng } from '../../shared/rng';
-import { generateName } from '../../shared/packs/characters';
+import { assignFamilyNames } from './familyNames';
 import type { Census, Resident } from './census';
 import { scheduledLot } from './census';
 import type { World } from './world';
@@ -21,12 +20,8 @@ export class ResidentPool {
   private active = new Map<number, number>();
 
   constructor(private w: World, private census: Census) {
+    assignFamilyNames(census, w.seed);
     for (const resident of census.residents) {
-      if (!resident.identity) {
-        const rng = new Rng(w.seed ^ Math.imul(resident.id, 0x85ebca6b));
-        const gender = rng.chance(0.5) ? 'male' : 'female';
-        resident.identity = { gender, name: generateName(() => rng.next(), gender) };
-      }
       if (resident.occupiedLot !== undefined) this.occupants.add(resident);
       if (resident.walk) this.walking.add(resident);
       const home = census.households[resident.household - 1].lot;

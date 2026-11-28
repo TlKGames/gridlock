@@ -1,6 +1,7 @@
 // Bayhaven: the original GRIDLOCK city. A ~2 km island of districts, three crews, the law up to
 // the army. Its content (calls, voices, radio) still lives at the project's top-level content/,
 // its models in src/client/models and voices in src/client/voice (see ./client.ts).
+import { NAME_POOL } from './names';
 import { HAIRSTYLES } from '../../shared/packs/hairstyles';
 import type { CharacterFile, PlayerFile, Universe } from '../../shared/packs/types';
 import benny from '../../../content/characters/benny_lutz/benny_lutz.json';
@@ -67,14 +68,7 @@ export const BAYHAVEN: Universe = {
     hat: ['', '#16171a', '#c62a22', '#1f5bff', '#e8e2d0', '#e3b30c', '#3c3f2e'],
   },
   defaultLook: { skin: 0, hair: 1, hairStyle: 0, top: 0, bottom: 0, hat: 0 },
-  nameParts: {
-    male: ['Ace', 'Benny', 'Dax', 'Eddie', 'Frankie', 'Hector', 'Jojo', 'Lou', 'Mack', 'Nico', 'Ozzy', 'Quinn', 'Rocco', 'Sal', 'Vinnie', 'Wren', 'Yuri', 'Zed', 'Remy', 'Marco', 'Tito'],
-    female: ['Carmen', 'Frankie', 'Gigi', 'Ivy', 'Jojo', 'Kat', 'Lou', 'Pia', 'Quinn', 'Tess', 'Wren', 'Remy', 'Lola', 'Dina', 'Bea'],
-    first: ['Ace', 'Benny', 'Carmen', 'Dax', 'Eddie', 'Frankie', 'Gigi', 'Hector', 'Ivy', 'Jojo', 'Kat', 'Lou', 'Mack', 'Nico',
-      'Ozzy', 'Pia', 'Quinn', 'Rocco', 'Sal', 'Tess', 'Vinnie', 'Wren', 'Yuri', 'Zed', 'Remy', 'Lola', 'Marco', 'Dina', 'Tito', 'Bea'],
-    last: ['Moretti', 'Kane', 'Vega', 'Doyle', 'Sloane', 'Petrov', 'Reyes', 'Malone', 'Okafor', 'Brandt', 'Falco', 'Quill', 'Hale',
-      'Navarro', 'Cruz', 'Byrne', 'Kovac', 'Laine', 'Price', 'Russo', 'Stone', 'Tran', 'Voss', 'Wilde', 'Ziegler', 'Marsh'],
-  },
+  nameParts: NAME_POOL,
   armorModel: ARMOR_MODEL,
   streetProps: STREET_PROPS,
   tables: TABLES,

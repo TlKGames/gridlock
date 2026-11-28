@@ -4,6 +4,7 @@
 // No phones: the outfits post their work on job posts (a brief, no call), and their riders in town
 // give it face to face. Its cast (content/redrock/characters) is the people you can walk up and
 // talk to, shown in bubbles, not voiced yet; the player's side is its own (content/redrock/player).
+import { NAME_POOL } from './names';
 import { HAIRSTYLES } from '../../shared/packs/hairstyles';
 import player from '../../../content/redrock/player/player.json';
 import bankGuard from '../../../content/redrock/characters/bank_guard/bank_guard.json';
@@ -102,14 +103,7 @@ export const REDROCK: Universe = {
     hat: ['', '#4a3a2a', '#2a2018', '#8a6a4a', '#c9b48a', '#1a1612', '#e6dcc0'],
   },
   defaultLook: { skin: 0, hair: 1, hairStyle: 0, top: 1, bottom: 0, hat: 1 },
-  nameParts: {
-    male: ['Abe', 'Clem', 'Eli', 'Jeb', 'Josiah', 'Ned', 'Orrin', 'Percy', 'Silas', 'Tobias', 'Wade', 'Zeke', 'Amos', 'Cyrus', 'Dell', 'Ezra', 'Luke', 'Rufus'],
-    female: ['Clem', 'Cora', 'Etta', 'Hattie', 'Lottie', 'Mabel', 'Ruth', 'Nell', 'Belle', 'Dell', 'Ida', 'Mattie'],
-    first: ['Abe', 'Clem', 'Cora', 'Eli', 'Etta', 'Hattie', 'Jeb', 'Josiah', 'Lottie', 'Mabel', 'Ned', 'Orrin', 'Percy', 'Ruth',
-      'Silas', 'Tobias', 'Wade', 'Zeke', 'Nell', 'Amos', 'Belle', 'Cyrus', 'Dell', 'Ezra', 'Ida', 'Luke', 'Mattie', 'Rufus'],
-    last: ['Bright', 'Dunn', 'Fairbanks', 'Grady', 'Holt', 'Keene', 'Larkin', 'Pruitt', 'Sutter', 'Tate', 'Vance', 'Wheeler',
-      'Yancey', 'Corbin', 'Ashby', 'Pike', 'Hatch', 'Merritt', 'Coley', 'Bram', 'Starling', 'Thorne'],
-  },
+  nameParts: NAME_POOL,
   armorModel: VEST,
   streetProps: STREET_PROPS,
   fixtures: FIXTURES,

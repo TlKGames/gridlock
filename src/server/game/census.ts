@@ -13,6 +13,7 @@ export interface Household {
   id: number;
   lot: number;
   unit: number;
+  surname?: string;
 }
 
 export interface Resident {

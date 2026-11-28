@@ -23,12 +23,9 @@ export type Gender = 'male' | 'female';
 
 export function generateName(random: () => number, gender?: Gender): string {
   const first = gender ? NAME_PARTS[gender] : NAME_PARTS.first;
-  for (;;) {
-    const given = first[Math.floor(random() * first.length)];
-    const family = NAME_PARTS.last[Math.floor(random() * NAME_PARTS.last.length)];
-    const name = given + ' ' + family;
-    if (name.length <= 16) return name;
-  }
+  const family = NAME_PARTS.last[Math.floor(random() * NAME_PARTS.last.length)];
+  const choices = first.filter(given => given.length + 1 + family.length <= 16);
+  return choices[Math.floor(random() * choices.length)] + ' ' + family;
 }
 
 export function installLooks(u: Universe): void {
