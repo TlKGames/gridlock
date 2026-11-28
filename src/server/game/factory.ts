@@ -7,7 +7,7 @@ import type { World } from './world';
 export function newAi(): Ai {
   return {
     task: 'none', t: 0, think: Math.random() * 0.5, target: 0, tx: 0, ty: 0,
-    block: -1, corner: 0, cdir: 1, crossing: false, drive: null, post: null, squad: 0, crew: 0, panicT: 0,
+    block: -1, corner: 0, cdir: 1, crossing: 'none', drive: null, post: null, squad: 0, crew: 0, panicT: 0,
     enemy: 0, enemyT: 0, stuckT: 0, sideT: 0, sideDir: 1, workT: 0,
   };
 }

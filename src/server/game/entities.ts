@@ -29,7 +29,7 @@ export interface Ai {
   think: number;            // countdown to next perception tick
   target: number;           // entity id
   tx: number; ty: number;   // goal point
-  block: number; corner: number; cdir: 1 | -1; crossing: boolean;
+  block: number; corner: number; cdir: 1 | -1; crossing: 'none' | 'waiting' | 'walking';
   drive: DriveState | null;
   post: { x: number; y: number; angle: number } | null;
   squad: number;            // dispatch squad id, 0 none

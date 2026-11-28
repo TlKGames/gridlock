@@ -5,6 +5,8 @@ import { Mode } from '../../../shared/protocol';
 import type { Ped, TaskName } from '../entities';
 import { freeSeat, seatPed } from '../factory';
 import type { World } from '../world';
+import { CYCLE } from '../../../shared/world/traffic';
+import { safeToCross } from './pedCrossings';
 import { reachDist } from './doors';
 import { soldierHostile } from './soldiers';
 import { route } from '../systems/lifts';
@@ -12,7 +14,7 @@ import { route } from '../systems/lifts';
 export function setTask(p: Ped, task: TaskName, target = 0, tx = 0, ty = 0): void {
   const ai = p.ai!;
   ai.task = task; ai.t = 0; ai.target = target; ai.tx = tx; ai.ty = ty; ai.workT = 0;
-  if (task !== 'wander') ai.crossing = false;
+  if (task !== 'wander') ai.crossing = 'none';
 }
 
 function stop(p: Ped): void {
@@ -78,10 +80,25 @@ export function wander(w: World, p: Ped, dt: number): void {
   const ai = p.ai!;
   if (ai.block < 0 && !snapToBlock(w, p)) { stop(p); return; }
   const block = w.city.blocks[ai.block];
-  const [tx, ty] = ai.crossing ? [ai.tx, ai.ty] : ringCorner(block.rect, ai.corner);
+  if (ai.crossing === 'waiting') {
+    const waited = ai.workT;
+    ai.workT += dt;
+    if (waited > 0 && Math.floor(waited * 4) === Math.floor(ai.workT * 4)) { stop(p); return; }
+    if (!safeToCross(w, p, ai.tx, ai.ty)) {
+      // A wreck or parked car can block this crossing indefinitely. Try the next corner.
+      if (ai.workT > CYCLE + 3) {
+        ai.crossing = 'none';
+        ai.corner = (ai.corner + ai.cdir + 4) % 4;
+      }
+      stop(p);
+      return;
+    }
+    ai.crossing = 'walking';
+  }
+  const [tx, ty] = ai.crossing === 'walking' ? [ai.tx, ai.ty] : ringCorner(block.rect, ai.corner);
   const d = moveToward(w, p, tx, ty, p.spec.walkSpeed, dt);
   if (d > 1.2) return;
-  if (ai.crossing) { ai.crossing = false; snapToBlock(w, p); return; }
+  if (ai.crossing === 'walking') { ai.crossing = 'none'; snapToBlock(w, p); return; }
   if (w.rng.chance(0.3)) {
     const c = ai.corner;
     const outs: [number, number][] = [[[0, -1], [-1, 0]], [[0, -1], [1, 0]], [[0, 1], [1, 0]], [[0, 1], [-1, 0]]][c] as [number, number][];
@@ -90,7 +107,9 @@ export function wander(w: World, p: Ped, dt: number): void {
       const nb = w.map.blockAt(tx + ox * s, ty + oy * s);
       if (nb && nb.id !== block.id) {
         ai.tx = tx + ox * (s + 1.5); ai.ty = ty + oy * (s + 1.5);
-        ai.crossing = true;
+        ai.crossing = 'waiting';
+        ai.workT = 0;
+        stop(p);
         return;
       }
       if (w.map.isWater(tx + ox * s, ty + oy * s)) break;
