@@ -8,6 +8,7 @@ import type { Ped, Vehicle } from '../entities';
 import { unseatPed } from '../factory';
 import type { World } from '../world';
 import { BEHAVIOURS } from './behaviours';
+import { interruptCommute, walkCommute } from './commute';
 import { streetGoal } from './doors';
 import { waitForTrain } from './crossings';
 import { cruise, driveTo } from './driving';
@@ -29,6 +30,7 @@ export function updateAi(w: World, dt: number): void {
       // On fire: run around blindly.
       if (ai.task !== 'flee') setTask(p, 'flee', 0, p.body.x + w.rng.range(-3, 3), p.body.y + w.rng.range(-3, 3));
     }
+    if (p.commute && (p.vehicle || ai.task !== 'wander')) interruptCommute(p);
     if (p.vehicle) vehicleTask(w, p, dt);
     else footTask(w, p, dt);
   }
@@ -39,7 +41,10 @@ function footTask(w: World, p: Ped, dt: number): void {
   let done = false;
   p.trigger = ai.task === 'attack' ? p.trigger : false;
   switch (ai.task) {
-    case 'wander': wander(w, p, dt); break;
+    case 'wander':
+      if (p.commute) walkCommute(w, p, p.commute, dt);
+      else wander(w, p, dt);
+      break;
     case 'stand': case 'guard': standAt(w, p, dt); break;
     case 'flee': done = flee(w, p, dt); break;
     case 'cower': p.ctl.mx = 0; p.ctl.my = 0; done = ai.t > 3; if (done) setTask(p, 'flee', 0, ai.tx, ai.ty); return;
@@ -92,7 +97,15 @@ function vehicleTask(w: World, p: Ped, dt: number): void {
       if (ai.panicT > 0) ai.panicT -= dt;
       v.siren = false;
       if (flies(v.spec)) { v.ctl.down = true; v.ctl.throttle = 0; v.ctl.steer = 0; break; }
-      cruise(w, v, p, dt, ai.panicT > 0);
+      const goal = ai.panicT > 0 ? undefined : p.commute;
+      if (goal && Math.hypot(v.body.x - goal.pullOver.x, v.body.y - goal.pullOver.y) < 3 &&
+          Math.hypot(v.body.vx, v.body.vy) < 1.2) {
+        v.ctl.throttle = 0; v.ctl.handbrake = true;
+        unseatPed(w, p, true);
+        setTask(p, 'wander');
+        break;
+      }
+      cruise(w, v, p, dt, ai.panicT > 0, goal);
     }
   }
   // A train at the crossing ahead: wait for it (ai/crossings.ts).

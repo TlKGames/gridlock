@@ -98,11 +98,17 @@ export class Population {
     }
   }
 
+  checkpoint(): void {
+    for (const ped of this.w.peds.values()) this.residents?.checkpoint(ped);
+  }
+
   update(dt: number): void {
     this.timer -= dt;
     if (this.timer > 0) return;
     this.timer = 0.5;
     this.despawn();
+    this.residents?.update();
+    this.residents?.resumeWalks();
     for (const pl of this.w.players.values()) {
       const p = this.w.peds.get(pl.pid);
       if (!p) continue;
@@ -314,7 +320,10 @@ export class Population {
     for (const p of w.peds.values()) {
       if (p.player || p.persistent || p.vehicle) continue;
       const near = w.nearestPlayerDist2(p.body.x, p.body.y);
-      if (near > far2 || (p.dead && p.deadT > 75 && near > 50 * 50) || (p.dead && p.deadT > 180)) removePed(w, p);
+      if (near > far2 || (p.dead && p.deadT > 75 && near > 50 * 50) || (p.dead && p.deadT > 180)) {
+        this.residents?.checkpoint(p);
+        removePed(w, p);
+      }
     }
   }
 }

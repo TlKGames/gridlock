@@ -19,6 +19,8 @@ export interface Resident {
   id: number;
   household: number;
   identity?: { name: string; gender: 'male' | 'female' };
+  occupiedLot?: number;
+  walk?: { lot: number; minute: number; speed: number; points: { x: number; y: number; cross?: boolean }[] };
   archetype?: string;
   deceased?: boolean;
   job: { lot: number; start: number; duration: number } | null;

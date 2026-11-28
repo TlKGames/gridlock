@@ -62,7 +62,7 @@ export class Room {
     const save = loaded && loaded.seed === seed ? loaded : null;
     const w = (this.world = new World(seed));
     this.census = save?.census ?? createCensus(w.city, seed);
-    if (save) w.gameMinutes = save.gameMinutes;
+    if (save) { w.gameMinutes = save.gameMinutes; w.gameDay = save.gameDay ?? 0; }
     this.profiles = Object.assign(Object.create(null), save?.profiles);
     this.pop = new Population(w, this.census);
     this.dispatch = new Dispatch(w);
@@ -297,8 +297,9 @@ export class Room {
   }
 
   persist(): void {
+    this.pop.checkpoint();
     for (const pl of this.world.players.values()) this.storeProfile(pl);
-    const save: RoomSave = { census: this.census, version: SAVE_VERSION, universe: UNIVERSE.id, seed: this.world.seed, mode: this.rounds.mode.id, gameMinutes: this.world.gameMinutes, owners: [...this.econ.owners.entries()], safes: [...this.business.safes.entries()], profiles: this.profiles };
+    const save: RoomSave = { census: this.census, version: SAVE_VERSION, universe: UNIVERSE.id, seed: this.world.seed, mode: this.rounds.mode.id, gameMinutes: this.world.gameMinutes, gameDay: this.world.gameDay, owners: [...this.econ.owners.entries()], safes: [...this.business.safes.entries()], profiles: this.profiles };
     saveRoom(this.code, save);
   }
 
@@ -333,7 +334,8 @@ export class Room {
   tick(): void {
     const w = this.world;
     w.time += DT;
-    w.gameMinutes = (w.gameMinutes + RULES.gameMinutesPerSecond * DT) % 1440;
+    w.gameMinutes += RULES.gameMinutesPerSecond * DT;
+    if (w.gameMinutes >= 1440) { w.gameMinutes -= 1440; w.gameDay++; }
     w.rebuildHashes();
     processPlayers(w, DT);
     updateAi(w, DT);

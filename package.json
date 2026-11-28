@@ -13,7 +13,7 @@
     "start": "tsx src/server/main.ts",
     "play": "vite build && tsx src/server/main.ts",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck && node --import tsx scripts/rooms.ts && node --import tsx scripts/persistence.ts && node --import tsx scripts/tables.ts && node --import tsx scripts/melee.ts && node --import tsx scripts/coop.ts && node --import tsx scripts/redrock.ts && node --import tsx scripts/npc-services.ts && node --import tsx scripts/npc-allies.ts && node --import tsx scripts/indoors.ts && node --import tsx scripts/witnesses.ts && node --import tsx scripts/ped-crossings.ts && node --import tsx scripts/npc-interactions.ts && node --import tsx scripts/npc-driving.ts && node --import tsx scripts/npc-walking.ts && node --import tsx scripts/npc-life.ts",
+    "test": "npm run typecheck && node --import tsx scripts/rooms.ts && node --import tsx scripts/persistence.ts && node --import tsx scripts/tables.ts && node --import tsx scripts/melee.ts && node --import tsx scripts/coop.ts && node --import tsx scripts/redrock.ts && node --import tsx scripts/npc-services.ts && node --import tsx scripts/npc-allies.ts && node --import tsx scripts/indoors.ts && node --import tsx scripts/witnesses.ts && node --import tsx scripts/ped-crossings.ts && node --import tsx scripts/npc-interactions.ts && node --import tsx scripts/npc-driving.ts && node --import tsx scripts/npc-walking.ts && node --import tsx scripts/npc-life.ts && node --import tsx scripts/npc-commute.ts",
     "smoke": "tsx scripts/smoke.ts",
     "voices": "tsx scripts/voices.ts",
     "scripts": "tsx scripts/scripts-md.ts",

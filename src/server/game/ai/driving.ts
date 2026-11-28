@@ -1,4 +1,5 @@
 // NPC driving: lane-following traffic with lights, and routed/direct pursuit driving.
+import type { Destination } from './commute';
 import { angleDiff, clamp } from '../../../shared/math';
 import { obbVsObb } from '../../../shared/sim/dynamic';
 import { flies } from '../../../shared/sim/kinds';
@@ -60,7 +61,7 @@ export function sirenApproaching(w: World, v: Vehicle): boolean {
 }
 
 /** Appends the next lane (and the turn into it) to the traffic polyline. */
-function extend(w: World, d: DriveState): void {
+function extend(w: World, d: DriveState, goal?: Destination): void {
   const seg = w.city.segs[d.seg];
   const cur = laneOf(w, seg, d.dir, d.lane);
   const node = cur.to;
@@ -84,6 +85,24 @@ function extend(w: World, d: DriveState): void {
   let r = w.rng.next() * weights.reduce((a, b) => a + b, 0);
   let pick = options[0];
   for (let k = 0; k < options.length; k++) { r -= weights[k]; if (r <= 0) { pick = options[k]; break; } }
+  if (goal) {
+    // Prefer a legal exit leading toward the destination. Only plan when extending the lane path.
+    const frontage = goal.street;
+    const positive = frontage.axis === 'h' ? goal.curb.y > frontage.y0 : goal.curb.x < frontage.x0;
+    const target = w.city.nodes[positive ? frontage.a : frontage.b];
+    const route = findRoute(w, node.id, target.id);
+    const desired = route.length > 1 ? segBetween(w, node.id, route[1])?.id : goal.street.id;
+    if (desired !== undefined && options.includes(desired)) pick = desired;
+    else {
+      let best = Infinity;
+      for (const id of options) {
+        const s = w.city.segs[id];
+        const end = w.city.nodes[s.a === node.id ? s.b : s.a];
+        const score = Math.abs(end.x - target.x) + Math.abs(end.y - target.y);
+        if (score < best) { best = score; pick = id; }
+      }
+    }
+  }
   const next = w.city.segs[pick];
   const ndir: 1 | -1 = next.a === node.id ? 1 : -1;
   const probe = laneOf(w, next, ndir, 0);
@@ -290,14 +309,14 @@ function mustStop(node: RoadNode, axis: 'h' | 'v', t: number, dist: number, vf: 
 }
 
 /** Ordinary traffic: follow lanes, obey lights, keep distance. */
-export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false): void {
+export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, goal?: Destination): void {
   const ai = p.ai!;
   if (!ai.drive) ai.drive = newDrive(w, v);
   const d = ai.drive;
   const b = v.body;
   // The lane points are ground coordinates.
   const P = groundOf(b.x, b.y);
-  while (d.pts.length < 5) extend(w, d);
+  while (d.pts.length < 5) extend(w, d, goal);
   const vf = forwardSpeed(b);
   const junction = nextJunction(w, d);
   const blockedEntry = junction && Math.hypot(junction.at.x - P.x, junction.at.y - P.y) < 22
@@ -318,7 +337,7 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
     if (pt.stop !== undefined) commitJunction(w, v, w.city.nodes[pt.stop]);
     d.pts.shift();
   }
-  if (d.pts.length < 5) extend(w, d);
+  if (d.pts.length < 5) extend(w, d, goal);
   const laneCount = d.pts.find(pt => pt.stop !== undefined)?.lanes ?? 1;
   let target = panic ? 18 : laneCount > 1 ? 16 : 11.5;
   target = Math.min(target, v.spec.maxSpeed * 0.8);
@@ -418,6 +437,15 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
     const along = (P.x - pt.x) * ax + (P.y - pt.y) * ay;
     tx = pt.x + ax * (along + 6) - ay * PULL_OVER;
     ty = pt.y + ay * (along + 6) + ax * PULL_OVER;
+  }
+  if (goal && !held && pt.axis === goal.street.axis) {
+    const dx = goal.pullOver.x - P.x, dy = goal.pullOver.y - P.y;
+    const forward = dx * Math.cos(b.angle) + dy * Math.sin(b.angle);
+    const right = dy * Math.cos(b.angle) - dx * Math.sin(b.angle);
+    if (forward >= -2 && forward < 22 && right >= -2 && right < LANE_W + 3) {
+      tx = goal.pullOver.x; ty = goal.pullOver.y;
+      target = Math.min(target, Math.sqrt(5 * Math.max(0, Math.hypot(dx, dy) - 1.8)));
+    }
   }
   steerTo(v, tx, ty, target);
   if (creeping) v.ctl.steer = 0;

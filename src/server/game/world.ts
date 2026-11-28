@@ -17,6 +17,7 @@ export class World {
   readonly stairs: StairIndex;
   readonly rng: Rng;
   time = 0;                 // seconds since room start
+  gameDay = 0;
   gameMinutes = 9 * 60;     // in-game clock (starts 09:00)
 
   readonly peds = new Map<number, Ped>();

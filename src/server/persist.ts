@@ -20,6 +20,7 @@ export interface RoomSave {
   universe: string;
   seed: number;
   mode?: string;
+  gameDay?: number;
   gameMinutes: number;
   owners: [number, string][];
   /** Business safes: [property id, dollars]. */

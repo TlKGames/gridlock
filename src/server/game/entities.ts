@@ -63,6 +63,8 @@ export interface Ped {
   trigger: boolean; triggerPrev: boolean;
   /** Players: aiming on purpose this tick (BTN.aim), as a hold-up needs. */
   aimHeld?: boolean;
+  commute?: import('./ai/commute').Destination;
+  arrivedAt?: number;
   npcName?: string;
   resident?: import('./census').Resident;
   aim: number;
