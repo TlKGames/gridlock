@@ -1,3 +1,4 @@
+import { BAY_DEPTH, BAY_WIDTH } from '../../shared/world/parkingLayout';
 // A parked household car has a persistent title even when neither end of its trip is streamed.
 import { VEHICLES, ZONES, paletteFor, vehicleIndex } from '../../shared/packs';
 import { Rng } from '../../shared/rng';
@@ -74,7 +75,12 @@ export class HouseholdParking {
     for (let x = cx - 1; x <= cx + 1; x++) for (let y = cy - 1; y <= cy + 1; y++) {
       for (const i of this.buckets.get(cell(x, y)) ?? []) if (dist(i) <= RANGE ** 2) indices.push(i);
     }
-    indices.sort((a, b) => dist(a) - dist(b));
+    const score = (i: number) => {
+      const parcel = this.w.city.parking[i].lot;
+      const publicLot = parcel !== undefined && this.w.city.lots[parcel].use === 'parking';
+      return Math.sqrt(dist(i)) - (publicLot ? 25 : 0);
+    };
+    indices.sort((a, b) => score(a) - score(b));
     this.bays.set(lot, indices);
     return indices;
   }
@@ -98,8 +104,10 @@ export class HouseholdParking {
     const spec = VEHICLES[vehicleIndex(car.model)];
     for (const i of this.nearby(lot)) {
       const slot = 'parking:' + i;
-      if (car.slot === slot) { car.parkedLot = lot; return true; }
       const bay = this.w.city.parking[i];
+      if (bay.lot !== undefined && this.w.city.lots[bay.lot].use === 'parking' &&
+          (spec.length > BAY_DEPTH || spec.width > BAY_WIDTH)) continue;
+      if (car.slot === slot) { car.parkedLot = lot; return true; }
       // Leave enough room to swing out of a parallel space even at shift change.
       if (bay.lot === undefined && this.crowdedCurb(i, car)) continue;
       if (this.w.registry.atSlot(slot) || this.w.nearestPlayerDist2(bay.x, bay.y) < 70 ** 2 || !parkingFits(this.w, spec, bay)) continue;

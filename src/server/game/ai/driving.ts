@@ -1,5 +1,5 @@
 // NPC driving: lane-following traffic with lights, and routed/direct pursuit driving.
-import { leaveParking, recovering, startDetour } from './manoeuvres';
+import { parkingGoal, enterLot, leaveParking, recovering, startDetour } from './manoeuvres';
 import { chooseCurb } from './parking';
 import type { Destination } from './commute';
 import { angleDiff, clamp } from '../../../shared/math';
@@ -94,7 +94,7 @@ function extend(w: World, d: DriveState, goal?: Destination, avoidExit?: number)
     const positive = frontage.axis === 'h' ? goal.pullOver.y > frontage.y0 : goal.pullOver.x < frontage.x0;
     const target = w.city.nodes[positive ? frontage.a : frontage.b];
     const route = findRoute(w, node.id, target.id);
-    const desired = route.length > 1 ? segBetween(w, node.id, route[1])?.id : goal.street.id;
+    const desired = route.length > 1 ? segBetween(w, node.id, route[1])?.id : frontage.id;
     if (desired !== undefined && options.includes(desired)) pick = desired;
     else {
       let best = Infinity;
@@ -346,6 +346,8 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
     if (leaveParking(w, v, dt)) return;
     ai.drive = null;
   }
+  goal = parkingGoal(w, v, goal);
+  if (goal?.publicLot && !panic && enterLot(w, v, goal, dt)) return;
   if (!ai.drive) ai.drive = newDrive(w, v);
   const d = ai.drive;
   if (recovering(w, v, d, dt)) return;
@@ -570,7 +572,7 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
     ty = pt.y + ay * (along + 6) + ax * PULL_OVER;
   }
   if (v.parkingTarget?.lot !== goal?.lot || panic) delete v.parkingTarget;
-  if (goal && !held && !d.borrowedLane && pt.axis && Math.hypot(P.x - goal.pullOver.x, P.y - goal.pullOver.y) < 55) {
+  if (goal && !goal.publicLot && !held && !d.borrowedLane && pt.axis && Math.hypot(P.x - goal.pullOver.x, P.y - goal.pullOver.y) < 55) {
     const spot = v.parkingTarget = chooseCurb(w, v, goal);
     if (spot) {
       tx = spot.x; ty = spot.y;

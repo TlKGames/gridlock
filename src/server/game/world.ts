@@ -12,7 +12,7 @@ import { SpatialHash } from './spatial';
 import { VehicleRegistry } from './vehicleRegistry';
 
 export class World {
-  readonly registry = new VehicleRegistry(this);
+  readonly registry: VehicleRegistry;
   readonly city: City;
   readonly map: CityMap;
   readonly statics: StaticWorld;
@@ -51,6 +51,7 @@ export class World {
 
   constructor(readonly seed: number) {
     this.city = generateCity(seed);
+    this.registry = new VehicleRegistry(this);
     this.map = new CityMap(this.city);
     this.statics = new StaticWorld(this.city);
     this.stairs = new StairIndex(this.city);

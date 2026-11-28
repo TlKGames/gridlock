@@ -1,3 +1,4 @@
+import { lotLayout, DRIVE_WIDTH } from './parkingLayout';
 // City assembly plus spatial lookups used by physics, AI and rendering.
 import { dockRect, moorings } from './moorings';
 import { waterfront } from './waterfront';
@@ -65,7 +66,19 @@ export function generateCity(seed: number): City {
   const buildings = lo.lots.filter((l) => l.building).map((l) => l.building!);
   const serviceLots = new Set(places.services.map((p) => p.lot));
   // Parking stalls on lots turned into services/pads are dropped.
-  const parking = [...lo.parking.filter((p) => p.lot === undefined || !serviceLots.has(p.lot)), ...curbSpots(segs, nodes)];
+  const driveways = lo.lots.flatMap(lot => {
+    if (!WORLD.modern || lot.use !== 'parking' || serviceLots.has(lot.id)) return [];
+    const layout = lotLayout(lot);
+    if (layout) return [layout];
+    lot.use = 'plaza';
+    return [];
+  });
+  const curbs = curbSpots(segs, nodes).filter(p => !driveways.some(a => {
+    const dx = p.x - a.x, dy = p.y - a.y;
+    const outward = dx * a.fx + dy * a.fy;
+    return outward >= 0 && outward < 12 && Math.abs(dx * a.fy - dy * a.fx) < DRIVE_WIDTH / 2 + 4;
+  }));
+  const parking = [...lo.parking.filter((p) => p.lot === undefined || !serviceLots.has(p.lot)), ...curbs];
   // A landlocked map ends in cliffs all round: solid rock over the margin.
   if (WORLD.edge === 'cliffs') {
     const M = MAP_SIZE, a = LAND0, b = LAND1, rock = '#8a6a4f', h = 26;

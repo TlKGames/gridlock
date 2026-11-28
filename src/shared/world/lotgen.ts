@@ -4,6 +4,8 @@ import { ZONES, type ZoneSpec } from '../packs';
 import type { Rng } from '../rng';
 import { type Block, type Building, Dir, type Fixture, type Lot, type Obstacle, type ParkSpot, type Rock, SIDEWALK_W, type Tree } from './cityTypes';
 import { wildFixtures } from './fixtures';
+import { WORLD } from './worldSpec';
+import { lotStalls } from './parkingLayout';
 import { landforms } from './landforms';
 import type { RoadLayout } from './roadgen';
 
@@ -295,6 +297,7 @@ export class LotBuilder {
   }
 
   private stalls(lot: Lot): void {
+    if (WORLD.modern) { this.out.parking.push(...lotStalls(lot)); return; }
     const r = insetRect(lot.rect, 1.5);
     const alongX = rectW(r) >= rectH(r);
     const depth = 5.4, pitch = 2.9;

@@ -1,6 +1,7 @@
 // Road paint in world metres. Each stripe is a lit quad, batched by map tile.
 import * as THREE from 'three';
 import type { CityMap } from '../../shared/world/city';
+import { lotLayout, BAY_WIDTH, BAY_DEPTH, DRIVE_WIDTH } from '../../shared/world/parkingLayout';
 import { LANE_W } from '../../shared/world/cityTypes';
 import { WORLD } from '../../shared/world/worldSpec';
 import { tileKey } from './instancing';
@@ -79,17 +80,27 @@ export function buildRoadMarkings(scene: THREE.Scene, map: CityMap): void {
   }
 
   for (const lot of city.lots) {
-    if (lot.use !== 'parking') continue;
-    const r = lot.rect, alongX = r.x1 - r.x0 >= r.y1 - r.y0;
-    const length = alongX ? r.x1 - r.x0 : r.y1 - r.y0;
-    for (let at = 1.5; at < length - 1.5; at += 2.9) {
-      if (alongX) {
-        rect(r.x0 + at - 0.075, r.y0 + 1.5, 0.15, 5.4, STALL);
-        rect(r.x0 + at - 0.075, r.y1 - 6.9, 0.15, 5.4, STALL);
-      } else {
-        rect(r.x0 + 1.5, r.y0 + at - 0.075, 5.4, 0.15, STALL);
-        rect(r.x1 - 6.9, r.y0 + at - 0.075, 5.4, 0.15, STALL);
-      }
+    const a = lotLayout(lot);
+    if (!a) continue;
+    const { seg } = map.nearestSegment(a.x, a.y);
+    const span = Math.abs(a.fx ? a.x - seg.x0 : a.y - seg.y0) - seg.width / 2;
+    if (span > 0 && span < 15) {
+      if (a.fx) rect(Math.min(a.x, a.x + span * a.fx), a.y - DRIVE_WIDTH / 2, span, DRIVE_WIDTH, '#45484d');
+      else rect(a.x - DRIVE_WIDTH / 2, Math.min(a.y, a.y + span * a.fy), DRIVE_WIDTH, span, '#45484d');
+    }
+  }
+  const painted = new Set<string>();
+  for (const spot of city.parking) {
+    if (spot.lot === undefined || city.lots[spot.lot].use !== 'parking') continue;
+    const horizontal = Math.abs(Math.cos(spot.angle)) > 0.5;
+    for (const side of [-1, 1]) {
+      const x = spot.x + (horizontal ? 0 : side * BAY_WIDTH / 2);
+      const y = spot.y + (horizontal ? side * BAY_WIDTH / 2 : 0);
+      const key = x.toFixed(4) + ',' + y.toFixed(4) + ',' + horizontal;
+      if (painted.has(key)) continue;
+      painted.add(key);
+      const w = horizontal ? BAY_DEPTH : 0.15, h = horizontal ? 0.15 : BAY_DEPTH;
+      rect(x - w / 2, y - h / 2, w, h, STALL);
     }
   }
   for (const tile of tiles.values()) {

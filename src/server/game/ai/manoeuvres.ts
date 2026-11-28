@@ -1,3 +1,7 @@
+import { WORLD } from '../../../shared/world/worldSpec';
+import type { Destination } from './commute';
+import { parkingFits } from './parking';
+import { lotLayout, BAY_DEPTH, BAY_WIDTH } from '../../../shared/world/parkingLayout';
 // Find short forward/reverse manoeuvres into the adjacent travel lane using the
 // same steering and acceleration as the live car. Departures and blocked-road recovery share this search.
 import { angleDiff, clamp } from '../../../shared/math';
@@ -117,11 +121,80 @@ function nextMove(w: World, v: Vehicle, e: Maneuver, nearby: ReturnType<typeof s
   return plan.reverse().slice(0, 3);
 }
 
+function waypoint(x: number, y: number, hx: number, hy: number): Maneuver {
+  return { x: x - 2 * hx, y: y - 2 * hy, hx, hy, length: 4, move: hold, left: 0, plan: [] };
+}
+const arrivals = new WeakMap<Vehicle, { goal: Destination; steps: Maneuver[]; phaseTime: number }>();
+
+const failures = new WeakMap<Vehicle, { goal: Destination; until: number; curb: Destination }>();
+export function parkingGoal(w: World, v: Vehicle, goal?: Destination) {
+  const failed = failures.get(v);
+  return failed && failed.goal === goal && failed.until > w.time ? failed.curb : goal;
+}
+
+export function enterLot(w: World, v: Vehicle, goal: Destination, dt: number): boolean {
+  const lot = goal.publicLot;
+  if (!lot) return false;
+  let arrival = arrivals.get(v);
+  if (arrival?.goal !== goal || !v.parkingTarget) arrival = undefined;
+  if (!arrival) {
+    const dx = lot.x - v.body.x, dy = lot.y - v.body.y;
+    const ahead = dx * Math.cos(v.body.angle) + dy * Math.sin(v.body.angle);
+    if (dx * -Math.sin(v.body.angle) + dy * Math.cos(v.body.angle) < 0 || Math.hypot(dx, dy) > 17 || ahead < -1 || w.map.nearestSegment(v.body.x, v.body.y).seg !== lot.street) return false;
+    const bay = lot.bays.find(({ spot, index }) => v.spec.length <= BAY_DEPTH && v.spec.width <= BAY_WIDTH &&
+      !w.registry.atSlot('parking:' + index) && parkingFits(w, v.spec, spot, v));
+    if (bay) {
+      const { spot } = bay;
+      v.parkingTarget = { ...spot, lot: goal.lot };
+      const aisleX = lot.fx ? spot.x : lot.x, aisleY = lot.fy ? spot.y : lot.y;
+      arrival = { goal, phaseTime: 0, steps: [
+        waypoint(lot.x, lot.y, -lot.fx, -lot.fy),
+        waypoint(aisleX, aisleY, -lot.fx, -lot.fy),
+        waypoint(spot.x, spot.y, Math.cos(spot.angle), Math.sin(spot.angle))
+      ] };
+      arrivals.set(v, arrival);
+    }
+  }
+  if (arrival && arrival.phaseTime < 45) {
+    const step = arrival.steps[0];
+    if (step && run(w, v, step, dt)) arrival.phaseTime += dt;
+    else {
+      arrival.steps.shift();
+      arrival.phaseTime = 0;
+      v.ctl.throttle = v.ctl.steer = 0;
+      v.ctl.handbrake = true;
+    }
+    return true;
+  }
+  arrivals.delete(v);
+  delete v.parkingTarget;
+  failures.set(v, { goal, until: w.time + 180, curb: { ...goal, ...goal.fallback, publicLot: undefined } });
+  return false;
+}
+
+const departures = new WeakMap<Vehicle, { bay: number; steps: Maneuver[] }>();
 export function leaveParking(w: World, v: Vehicle, dt: number): boolean {
+  const index = v.departureBay!;
+  let path = departures.get(v);
+  if (path?.bay !== index) {
+    const spot = w.city.parking[index];
+    const a = !WORLD.modern || spot.lot === undefined ? undefined : lotLayout(w.city.lots[spot.lot]);
+    const steps = a ? [
+      waypoint(a.fx ? spot.x : a.x, a.fy ? spot.y : a.y, a.fx, a.fy),
+      waypoint(a.x, a.y, a.fx, a.fy)
+    ] : [];
+    path = { bay: index, steps };
+    departures.set(v, path);
+  }
+  if (path.steps.length) {
+    if (run(w, v, path.steps[0], dt)) return true;
+    path.steps.shift();
+    return true;
+  }
   let e = exits.get(v);
   if (!e || e.bay !== v.departureBay) { e = exitFor(w, v.departureBay!); exits.set(v, e); }
   if (run(w, v, e, dt)) return true;
-  exits.delete(v); delete v.departureBay;
+  departures.delete(v); exits.delete(v); delete v.departureBay;
   return false;
 }
 

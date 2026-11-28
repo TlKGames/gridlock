@@ -1,8 +1,10 @@
+import { lotLayout } from '../../../shared/world/parkingLayout';
+import { WORLD } from '../../../shared/world/worldSpec';
 // Scheduled civilians use the same street graph as traffic. Foot waypoints follow the edges
 // of each street and cross one arm of a junction at a time.
 import { Rng } from '../../../shared/rng';
 import { RULES } from '../../../shared/packs';
-import { DIR_VEC, Dir, type Segment } from '../../../shared/world/cityTypes';
+import { DIR_VEC, Dir, type ParkSpot, type Segment } from '../../../shared/world/cityTypes';
 import type { Resident } from '../census';
 import type { Ped } from '../entities';
 import type { World } from '../world';
@@ -14,7 +16,30 @@ import { moveToward } from './tasks';
 
 type Point = { x: number; y: number };
 type Waypoint = Point & { cross?: boolean };
-export interface Destination { lot: number; entrance: Point; curb: Point; pullOver: Point; parkingStreet?: Segment; street: Segment; indoors: boolean }
+type PublicLot = NonNullable<ReturnType<typeof lotLayout>> & { street: Segment; bays: { spot: ParkSpot; index: number }[] };
+const lotsByWorld = new WeakMap<World, PublicLot[]>();
+function publicLots(w: World) {
+  let lots = lotsByWorld.get(w);
+  if (lots) return lots;
+  const byLot = new Map<number, PublicLot>();
+  if (WORLD.modern) w.city.parking.forEach((spot, index) => {
+    if (spot.lot === undefined) return;
+    let lot = byLot.get(spot.lot);
+    if (!lot) {
+      const layout = lotLayout(w.city.lots[spot.lot]);
+      if (!layout || w.registry.dealerAt(spot.x, spot.y)) return;
+      const street = w.map.nearestSegment(layout.x + layout.fx * 3, layout.y + layout.fy * 3).seg;
+      if ((street.axis === 'h') !== !!layout.fy || street.bridge) return;
+      lot = { ...layout, street, bays: [] };
+      byLot.set(spot.lot, lot);
+    }
+    lot.bays.push({ spot, index });
+  });
+  lots = [...byLot.values()];
+  lotsByWorld.set(w, lots);
+  return lots;
+}
+export interface Destination { publicLot?: PublicLot; fallback?: { pullOver: Point; parkingStreet?: Segment }; lot: number; entrance: Point; curb: Point; pullOver: Point; parkingStreet?: Segment; street: Segment; indoors: boolean }
 const routes = new WeakMap<Ped, { goal: Destination; steps: Waypoint[]; crossing: boolean }>();
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -51,6 +76,11 @@ export function destination(w: World, lotId: number): Destination {
     if (d < closest) { closest = d; pullOver = spot; }
   }
   const parkingStreet = closest < Infinity ? w.map.nearestSegment(pullOver.x, pullOver.y).seg : undefined;
+  const publicLot = publicLots(w).filter(a => distance(a, entrance) <= 65)
+    .sort((a, b) => distance(a, entrance) - distance(b, entrance))
+    .find(a => a.bays.some(b => !w.registry.atSlot('parking:' + b.index)));
+  if (publicLot) return { lot: lotId, entrance, curb, street: seg, indoors, publicLot,
+    pullOver: publicLot, parkingStreet: publicLot.street, fallback: { pullOver, parkingStreet } };
   return { lot: lotId, entrance, curb, pullOver, parkingStreet, street: seg, indoors };
 }
 
@@ -92,7 +122,9 @@ function itinerary(w: World, start: Point, goal: Destination): Waypoint[] {
   };
   if (first.id !== goal.street.id || (first.axis === 'h' ? initial.y !== goal.curb.y : initial.x !== goal.curb.x)) {
     const nearEnd = (s: Segment, p: Point) => distance(w.city.nodes[s.a], p) < distance(w.city.nodes[s.b], p) ? s.a : s.b;
-    const path = findRoute(w, nearEnd(first, start), nearEnd(goal.street, goal.curb));
+    const shared = first.id === goal.street.id ? undefined :
+      [first.a, first.b].find(id => id === goal.street.a || id === goal.street.b);
+    const path = shared !== undefined ? [shared] : findRoute(w, nearEnd(first, start), nearEnd(goal.street, goal.curb));
     if (!path.length) return [];
     for (let i = 0; i < path.length; i++) {
       const n = w.city.nodes[path[i]];

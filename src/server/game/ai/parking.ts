@@ -82,7 +82,7 @@ export function chooseCurb(w: World, v: Vehicle, goal: Destination) {
   const distance = (p: Pose) => Math.hypot(p.x - goal.pullOver.x, p.y - goal.pullOver.y);
   for (const spot of candidates.sort((a, b) => distance(a) - distance(b))) {
     const i = w.registry.parkingIndex(spot.x, spot.y);
-    if (i !== undefined && w.registry.atSlot('parking:' + i)) continue;
+    if (i === undefined || w.registry.atSlot('parking:' + i)) continue;
     if (clearParkingApproach(w, v, spot)) return { ...spot, lot: goal.lot };
   }
 }

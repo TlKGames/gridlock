@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { angleDiff } from '../src/shared/math';
+import { lotLayout, BAY_WIDTH, DRIVE_WIDTH, BAY_DEPTH } from '../src/shared/world/parkingLayout';
 import { parkedAngle, parkingFits, chooseCurb } from '../src/server/game/ai/parking';
 import { RULES, VEHICLES, pedWith } from '../src/shared/packs';
 import { World } from '../src/server/game/world';
 import { spawnPed, removePed, spawnVehicle, seatPed } from '../src/server/game/factory';
 import { ResidentPool } from '../src/server/game/residentPool';
+import { laneOf } from '../src/server/game/ai/route';
 import { destination, walkPosition } from '../src/server/game/ai/commute';
 import { updateAi } from '../src/server/game/ai/brain';
 import { updateNpcPeds, updateVehicles } from '../src/server/game/systems/movement';
@@ -12,6 +14,21 @@ import { roomAt } from '../src/server/game/ai/doors';
 import type { Resident } from '../src/server/game/census';
 
 const w = new World(RULES.citySeed);
+const rows = new Set<number>();
+for (const lot of w.city.lots.filter(l => l.use === 'parking')) {
+  const a = lotLayout(lot);
+  assert(a, 'every striped parcel has a street entrance');
+  rows.add(a.rows);
+  const bays = w.city.parking.filter(s => s.lot === lot.id);
+  assert.equal(bays.length, a.rows * a.count);
+  for (const bay of bays) {
+    const dx = bay.x - a.x, dy = bay.y - a.y;
+    const across = Math.abs(dx * a.fy - dy * a.fx);
+    assert(Math.abs(across - (DRIVE_WIDTH + BAY_DEPTH) / 2) < 1e-6, 'bay leaves the aisle clear');
+    assert(-(dx * a.fx + dy * a.fy) >= BAY_WIDTH / 2, 'bay lies inside its lot');
+  }
+}
+assert.deepEqual(rows, new Set([1, 2]));
 const place = w.city.interiors.find(i => i.clerkArch)!;
 const goal = destination(w, place.place.lot);
 const home = w.city.buildings.find(b => {
@@ -60,7 +77,10 @@ const angle = horizontal ? (direction > 0 ? 0 : Math.PI) : direction * Math.PI /
 const vType = VEHICLES.findIndex(v => v.seats > 0 && v.maxSpeed > 10 && !v.siren && v.roles.includes('traffic'));
 assert(vType >= 0);
 {
-  const car = spawnVehicle(w, vType, goal.pullOver.x - Math.cos(angle) * 15, goal.pullOver.y - Math.sin(angle) * 15, angle);
+  const lane = laneOf(w, parkingStreet, direction > 0 ? 1 : -1, parkingStreet.lanes - 1);
+  const car = spawnVehicle(w, vType, horizontal ? goal.pullOver.x - lane.hx * 15 : lane.sx,
+    horizontal ? lane.sy : goal.pullOver.y - lane.hy * 15, angle, -1, { owner: 'house:' + r.household });
+  r.commuteVin = car.vin;
   car.body.vx = 4 * Math.cos(angle); car.body.vy = 4 * Math.sin(angle);
   seatPed(w, p, car, 0);
   w.gameMinutes = 1380;
@@ -69,14 +89,24 @@ assert(vType >= 0);
   assert.equal(p.vehicle, 0, 'driver stops and gets out at the destination curb');
   const bay = w.city.parking[w.registry.parkingIndex(car.body.x, car.body.y)!];
   assert(bay, 'vehicle finishes centered in its chosen bay');
+  assert(goal.publicLot && bay.lot === goal.publicLot.bays[0].spot.lot, 'worker uses the public lot near the job');
   assert(Math.abs(angleDiff(car.body.angle, bay.angle)) <= 0.051, 'driver straightens before leaving the car');
   assert.equal(parkedAngle('00000001', 0.3, 0), 0);
   assert.equal(parkedAngle('00000008', 0.3, 0), 0.05);
   for (let i = 0; i < 3600 && p.arrivedAt !== goal.lot; i++) tick();
   assert.equal(p.arrivedAt, goal.lot);
+  w.gameMinutes = 10 * 60;
+  for (let i = 0; i < 9000; i++) {
+    if (i % 15 === 0) pool.update();
+    tick(); updateVehicles(w, 1 / 30);
+    if (p.vehicle === car.id && car.departureBay === undefined && w.map.onRoad(car.body.x, car.body.y)) break;
+  }
+  assert.equal(p.vehicle, car.id, 'worker collects the same car after the shift');
+  assert.equal(car.departureBay, undefined);
+  assert(w.map.onRoad(car.body.x, car.body.y), 'worker drives out onto the street');
 }
 
-console.log('Multi-street overnight round trip, checkpoint resumption, and curb-to-door arrival passed.');
+console.log('Multi-street overnight round trip, checkpoint resumption, and street-to-stall-to-work return trip passed.');
 
 {
   const street = w.city.segs.find(s => s.parking && s.axis === 'h' && s.x1 - s.x0 > 90)!;
@@ -115,6 +145,18 @@ console.log('Multi-street overnight round trip, checkpoint resumption, and curb-
     assert.equal(v.owner, 'house:' + person.household);
     assert(Math.hypot(v.at.x - door.x, v.at.y - door.y) <= 75);
   }
+  // Old saves use numeric bay IDs. Keep the physical location and owner if the
+  // same bay moved in the generated array, and rehome cars whose bay disappeared.
+  const [old, shifted] = structuredClone(saved.slice(0, 2));
+  old.slot = shifted.slot = 'parking:999999';
+  old.at.x += 2.13;
+  const restored = new World(city.seed);
+  restored.registry.load([old, shifted]);
+  for (const car of [old, shifted]) {
+    const index = restored.registry.parkingIndex(car.at.x, car.at.y);
+    assert(index !== undefined && restored.registry.atSlot('parking:' + index)?.vin === car.vin);
+  }
+  assert.notEqual(old.slot, shifted.slot);
   const worker = drivers.find(person => {
     const job = person.job!;
     return !buildingAccess(city, job.lot).indoors && scheduledLot(roster, person, city.gameMinutes) !== job.lot;

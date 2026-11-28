@@ -34,7 +34,10 @@ export class VehicleRegistry {
   private parkingIndices?: Map<string, number>;
   private slots = new Map<string, Registration>();
 
-  constructor(private w: World) {}
+  constructor(private w: World) {
+    const city = w.city;
+    this.dealerLots = city.services.filter(p => SERVICES[p.spec].verb === 'dealer').map(p => city.lots[p.lot].rect);
+  }
 
   setCensus(census: Census): void {
     const { city } = this.w;
@@ -46,7 +49,6 @@ export class VehicleRegistry {
       if (!ids) this.districts.set(district, ids = []);
       ids.push(h.id);
     }
-    this.dealerLots = city.services.filter(p => SERVICES[p.spec].verb === 'dealer').map(p => city.lots[p.lot].rect);
   }
   liveVehicle(vin: string) { return this.live.get(vin); }
   parkingIndex(x: number, y: number): number | undefined {
@@ -164,9 +166,19 @@ export class VehicleRegistry {
     return [...this.records.values()].filter(r => r.hp > 0);
   }
   load(records: Registration[]): void {
+    const displaced: Registration[] = [];
     for (const r of records) if (VEHICLES.some(v => v.id === r.model)) {
       if (!r.taken && r.holder === r.owner) r.parked = { ...r.at };
       r.holder = undefined;
+      if (r.slot?.startsWith('parking:')) {
+        const previous = this.w.city.parking[Number(r.slot.slice(8))];
+        const exact = this.parkingIndex(r.at.x, r.at.y);
+        if (exact !== undefined) r.slot = 'parking:' + exact;
+        else if (!previous || Math.hypot(previous.x - r.at.x, previous.y - r.at.y) >= 1.5) {
+          delete r.slot;
+          if (!r.taken && !r.reported && !r.stored && r.owner.startsWith('house:')) displaced.push(r);
+        }
+      }
       // Older commuters saved their final approach pose. Only correct a claimed bay
       // when the car is still there and the corrected footprint is clear.
       const bay = r.slot?.startsWith('parking:') && this.w.city.parking[Number(r.slot.slice(8))];
@@ -180,6 +192,17 @@ export class VehicleRegistry {
         }
       }
       this.index(r);
+    }
+    for (const r of displaced) {
+      const spec = VEHICLES.find(s => s.id === r.model)!;
+      let index = -1, best = 75;
+      this.w.city.parking.forEach((spot, i) => {
+        const distance = Math.hypot(spot.x - r.at.x, spot.y - r.at.y);
+        if (distance < best && !this.dealerAt(spot.x, spot.y) && !this.atSlot('parking:' + i) && parkingFits(this.w, spec, spot)) {
+          best = distance; index = i;
+        }
+      });
+      if (index >= 0) this.parkHousehold(r, index);
     }
     // Reserve the original saved bays first, then repair older in-lane registrations.
     for (const r of this.records.values()) {
