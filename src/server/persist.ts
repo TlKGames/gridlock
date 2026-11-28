@@ -16,6 +16,7 @@ export interface SavedProfile { name?: string; cash: number; bank?: number; gara
 
 export interface RoomSave {
   census?: Census;
+  vehicles?: import('./game/vehicleRegistry').Registration[];
   version: typeof SAVE_VERSION;
   universe: string;
   seed: number;

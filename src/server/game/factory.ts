@@ -1,4 +1,5 @@
 // Creating, seating and removing entities.
+import { newVin } from './vehicleRegistry';
 import { generateName } from '../../shared/packs/characters';
 import { Rng } from '../../shared/rng';
 import { PEDS, UNARMED, VEHICLES, WEAPONS, paletteFor, weaponIndex } from '../../shared/packs';
@@ -51,11 +52,11 @@ export function giveWeapon(p: Ped, wi: number, ammo: number): number {
   return p.weapons.findIndex((h) => h.w === wi);
 }
 
-export function spawnVehicle(w: World, type: number, x: number, y: number, angle: number, color = -1): Vehicle {
+export function spawnVehicle(w: World, type: number, x: number, y: number, angle: number, color = -1, vin: string = newVin()): Vehicle {
   const spec = VEHICLES[type];
   const pal = paletteFor(spec.colors);
   const v: Vehicle = {
-    id: w.id(), kind: 'veh', type, spec, body: newBody(x, y, angle), ctl: emptyControls(),
+    vin, id: w.id(), kind: 'veh', type, spec, body: newBody(x, y, angle), ctl: emptyControls(),
     color: color >= 0 ? color : pal[Math.floor(w.rng.next() * pal.length)],
     hp: spec.hp, burning: -1, wrecked: false, wreckT: 0,
     seats: new Array(Math.max(1, spec.seats)).fill(0),
@@ -70,6 +71,13 @@ export function spawnVehicle(w: World, type: number, x: number, y: number, angle
 export function seatPed(w: World, p: Ped, v: Vehicle, seat: number): void {
   if (p.vehicle) unseatPed(w, p, false);
   v.seats[seat] = p.id;
+  if (seat === 0) {
+    if (v.parkedHousehold !== undefined) {
+      w.registry.register(v, 'house:' + v.parkedHousehold);
+      delete v.parkedHousehold;
+    }
+    w.registry.drive(p, v);
+  }
   p.vehicle = v.id;
   p.seat = seat;
   p.body.x = v.body.x; p.body.y = v.body.y;
@@ -80,6 +88,7 @@ export function seatPed(w: World, p: Ped, v: Vehicle, seat: number): void {
 export function unseatPed(w: World, p: Ped, place = true): void {
   const v = w.vehicles.get(p.vehicle);
   if (v) {
+    w.registry.exit(p, v);
     if (v.seats[p.seat] === p.id) v.seats[p.seat] = 0;
     if (place) placeBeside(w, p, v, p.seat % 2 === 0 ? -1 : 1);
   }
@@ -133,7 +142,8 @@ export function removePed(w: World, p: Ped): void {
   w.peds.delete(p.id);
 }
 
-export function removeVehicle(w: World, v: Vehicle): void {
+export function removeVehicle(w: World, v: Vehicle, unload = false): void {
+  w.registry.remove(v, unload);
   for (const id of v.seats) {
     const p = id ? w.peds.get(id) : undefined;
     if (!p) continue;

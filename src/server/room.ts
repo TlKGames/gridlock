@@ -64,6 +64,7 @@ export class Room {
     this.census = save?.census ?? createCensus(w.city, seed);
     if (save) { w.gameMinutes = save.gameMinutes; w.gameDay = save.gameDay ?? 0; }
     this.profiles = Object.assign(Object.create(null), save?.profiles);
+    w.registry.load(save?.vehicles ?? []);
     this.pop = new Population(w, this.census);
     this.dispatch = new Dispatch(w);
     this.econ = new Economy(w);
@@ -148,7 +149,7 @@ export class Room {
     const spawn = resume ?? this.spawnPoint(pl);
     const ped = makeAvatar(w, pl, spawn.x, spawn.y);
     equipStart(ped);
-    if (resume) { ped.body.angle = resume.angle; resumeVehicle(w, pl, ped, resume); }
+    if (resume) { ped.body.angle = resume.angle; resumeVehicle(w, pl, ped, resume, this.code); }
     w.players.set(pl.id, pl);
     pl.send({ t: 'welcome', id: pl.id, room: this.code, seed: w.seed, maxPlayers: RULES.maxPlayers } satisfies S2C);
     this.sendSave(pl);
@@ -191,7 +192,7 @@ export class Room {
       w.peds.delete(p.id);
     }
     const car = pl.garageCar ? w.vehicles.get(pl.garageCar) : undefined;
-    if (car && !car.seats.some((s) => s)) removeVehicle(w, car);
+    if (car && !car.seats.some((s) => s)) removeVehicle(w, car, true);
     w.players.delete(pl.id);
     w.notify('info', `${pl.name} left`);
     this.persist();
@@ -299,7 +300,7 @@ export class Room {
   persist(): void {
     this.pop.checkpoint();
     for (const pl of this.world.players.values()) this.storeProfile(pl);
-    const save: RoomSave = { census: this.census, version: SAVE_VERSION, universe: UNIVERSE.id, seed: this.world.seed, mode: this.rounds.mode.id, gameMinutes: this.world.gameMinutes, gameDay: this.world.gameDay, owners: [...this.econ.owners.entries()], safes: [...this.business.safes.entries()], profiles: this.profiles };
+    const save: RoomSave = { vehicles: this.world.registry.save(), census: this.census, version: SAVE_VERSION, universe: UNIVERSE.id, seed: this.world.seed, mode: this.rounds.mode.id, gameMinutes: this.world.gameMinutes, gameDay: this.world.gameDay, owners: [...this.econ.owners.entries()], safes: [...this.business.safes.entries()], profiles: this.profiles };
     saveRoom(this.code, save);
   }
 

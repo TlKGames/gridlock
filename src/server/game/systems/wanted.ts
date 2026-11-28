@@ -21,13 +21,13 @@ export function lawCanSee(w: World, x: number, y: number, range = RULES.heatSigh
   for (const v of w.vehicles.values()) {
     if (!flies(v.spec) || v.body.alt < 8 || v.wrecked) continue;
     const d = v.seats[0] ? w.peds.get(v.seats[0]) : undefined;
-    if (d && isLawful(d) && dist2(v.body.x, v.body.y, x, y) < 140 * 140) return true;
+    if (d && !d.dead && isLawful(d) && dist2(v.body.x, v.body.y, x, y) < 140 * 140) return true;
   }
   // Lawful drivers see from their cars.
   w.vehiclesNear(x, y, range, (v) => {
     if (seen) return;
     const d = v.seats[0] ? w.peds.get(v.seats[0]) : undefined;
-    if (d && isLawful(d) && !w.statics.raycast(v.body.x, v.body.y, x, y, 1.4)) seen = true;
+    if (d && !d.dead && isLawful(d) && !w.statics.raycast(v.body.x, v.body.y, x, y, 1.4)) seen = true;
   });
   return seen;
 }
@@ -85,15 +85,22 @@ function refreshLevel(pl: Player): void {
 
 export function updateWanted(w: World, dt: number): void {
   for (const pl of w.players.values()) {
-    if (pl.heat <= 0) continue;
     const p = w.peds.get(pl.pid);
     if (!p || p.dead) continue;
     pl.seenCheckT -= dt;
     if (pl.seenCheckT <= 0) {
       pl.seenCheckT = 0.5;
       const pos = w.pedPos(p);
-      if (lawCanSee(w, pos.x, pos.y)) pl.seenT = 0;
-      else pl.seenT += 0.5;
+      const v = p.vehicle ? w.vehicles.get(p.vehicle) : undefined;
+      const hot = v && w.registry.hot(p, v);
+      if (!hot && pl.heat <= 0) continue;
+      if (lawCanSee(w, pos.x, pos.y)) {
+        if (hot && pl.heat < WANTED[0].heat) {
+          addHeat(pl, WANTED[0].heat - pl.heat);
+          w.notify('warn', 'Police recognized the reported stolen vehicle.', pl);
+        }
+        pl.seenT = 0;
+      } else pl.seenT += 0.5;
     }
     if (pl.seenT > 5) {
       pl.heat = Math.max(0, pl.heat - RULES.heatDecayPerSec * dt * (1 + pl.wanted * 0.5));

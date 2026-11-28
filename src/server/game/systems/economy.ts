@@ -164,7 +164,17 @@ export class Economy {
         if (!pl.owned.includes(place.id) || PROPERTIES[place.spec].kind !== 'home') return 'Not your garage.';
         const vi = Number(id);
         if (!pl.garage.includes(vi)) return 'You do not own that vehicle.';
-        this.deliver(pl, vi, place);
+        const owned = [...w.registry.owned('player:' + pl.ownerKey) ?? []].filter(r => r.model === VEHICLES[vi].id);
+        const available = owned.find(r => !r.taken && !r.holder);
+        if (!available && owned.length) return 'Your vehicle is already in use or missing.';
+        if (available) {
+          const car = w.registry.show(available);
+          if (car.seats.some(Boolean)) return 'Your vehicle is occupied.';
+          const pad = place.pad ?? { x: place.x, y: place.y, angle: 0 };
+          Object.assign(car.body, { x: pad.x, y: pad.y, angle: pad.angle, vx: 0, vy: 0 });
+          available.parked = { x: pad.x, y: pad.y };
+          car.owner = pl.id; pl.garageCar = car.id;
+        } else this.deliver(pl, vi, place);
         return null;
       }
       case 'property': {
@@ -189,6 +199,7 @@ export class Economy {
         if (!pay(price)) return 'Not enough money.';
         const pal = paletteFor(v.spec.colors);
         v.color = chosen >= 0 ? chosen : pal[(pal.indexOf(v.color) + 1 + Math.floor(w.rng.next() * (pal.length - 1))) % pal.length];
+        w.registry.respray(v);
         v.hp = v.spec.hp;
         v.dents = [0, 0, 0, 0]; // the bodywork's knocked out too
         const wanted = pl.wanted > 0;
@@ -217,10 +228,17 @@ export class Economy {
   private deliver(pl: Player, vi: number, place: Place): void {
     const w = this.w;
     const old = pl.garageCar ? w.vehicles.get(pl.garageCar) : undefined;
-    if (old && !old.seats.some((s) => s)) removeVehicle(w, old);
+    if (old && !old.seats.some(Boolean)) {
+      const registration = w.registry.get(old);
+      if (registration && !registration.taken && registration.owner === 'player:' + pl.ownerKey) {
+        registration.stored = true;
+        removeVehicle(w, old, true);
+      } else if (!registration) removeVehicle(w, old);
+    }
     const pad = place.pad ?? { x: place.x, y: place.y, angle: 0 };
     const v = spawnVehicle(w, vi, pad.x, pad.y, pad.angle);
     w.statics.resolveObb(v.body, v.spec.length / 2, v.spec.width / 2);
+    w.registry.register(v, 'player:' + pl.ownerKey);
     v.owner = pl.id;
     v.persistent = true;
     pl.garageCar = v.id;

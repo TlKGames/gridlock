@@ -64,6 +64,7 @@ export interface Ped {
   /** Players: aiming on purpose this tick (BTN.aim), as a hold-up needs. */
   aimHeld?: boolean;
   commute?: import('./ai/commute').Destination;
+  collectingVin?: string;
   arrivedAt?: number;
   npcName?: string;
   resident?: import('./census').Resident;
@@ -80,6 +81,8 @@ export interface Ped {
 }
 
 export interface Vehicle {
+  vin: string;
+  parkedHousehold?: number;
   id: number;
   kind: 'veh';
   type: number;

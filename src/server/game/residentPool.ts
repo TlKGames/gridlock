@@ -1,6 +1,6 @@
 // Home and work indexes cover the whole room; only nearby, currently scheduled residents spawn.
 import { RULES, pedIndex } from '../../shared/packs';
-import { removePed, spawnPed } from './factory';
+import { removePed, seatPed, spawnPed } from './factory';
 import { setTask } from './ai/tasks';
 import { destination, checkpointWalk, indoorSpot, resumeRoute, walkPosition, type Destination } from './ai/commute';
 import type { Ped } from './entities';
@@ -119,6 +119,22 @@ export class ResidentPool {
     for (const [id, pid] of this.active) {
       const ped = this.w.peds.get(pid);
       if (!ped?.resident) { this.active.delete(id); continue; }
+      if (ped.collectingVin && !ped.dead && !ped.vehicle && ped.ai?.task === 'wander') {
+        const r = this.w.registry.find(ped.collectingVin);
+        if (r && Math.hypot(ped.body.x - r.parked.x, ped.body.y - r.parked.y) >= 4) continue;
+        if (r) {
+          this.w.registry.checkSpot(ped);
+          const actual = this.w.registry.location(r);
+          if (Math.hypot(actual.x - ped.body.x, actual.y - ped.body.y) < 6) {
+            const car = this.w.registry.show(r);
+            if (!car.wrecked && !car.seats[0]) { seatPed(this.w, ped, car, 0); setTask(ped, 'drive'); }
+          }
+        }
+        ped.arrivedAt = undefined;
+        if (ped.resident) delete ped.resident.occupiedLot;
+        ped.collectingVin = undefined;
+        ped.commute = undefined;
+      }
       this.assign(ped, ped.resident);
       if (!ped.dead && !ped.vehicle && ped.ai?.task === 'wander' && ped.commute && !ped.commute.indoors &&
           ped.arrivedAt === ped.commute.lot && ped.resident.occupiedLot === ped.arrivedAt) {
@@ -133,11 +149,20 @@ export class ResidentPool {
     if (!resident.job) return;
     const lot = scheduledLot(this.census, resident, this.w.gameMinutes);
     if (ped.commute?.lot === lot) return;
+    const previous = resident.occupiedLot ?? ped.arrivedAt;
     delete resident.occupiedLot;
     this.occupants.delete(resident);
     const goal = this.goal(lot);
     ped.commute = goal.indoors ? { ...goal, entrance: indoorSpot(this.w, goal, resident.id) } : goal;
     ped.arrivedAt = undefined;
+    if (!ped.vehicle && previous !== undefined && previous !== lot) {
+      for (const car of this.w.registry.owned('house:' + resident.household) ?? []) {
+        if (car.reported || (car.holder === car.owner) || Math.hypot(car.parked.x - ped.body.x, car.parked.y - ped.body.y) > 100) continue;
+        ped.collectingVin = car.vin;
+        ped.commute = { ...this.goal(previous), indoors: false, entrance: car.parked };
+        break;
+      }
+    }
   }
 
   bind(resident: Resident, ped: Ped): void {

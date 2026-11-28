@@ -9,7 +9,10 @@ import { StairIndex } from '../../shared/world/stairs';
 import type { Fire, Pickup, Ped, Player, Projectile, Squad, Vehicle } from './entities';
 import { SpatialHash } from './spatial';
 
+import { VehicleRegistry } from './vehicleRegistry';
+
 export class World {
+  readonly registry = new VehicleRegistry(this);
   readonly city: City;
   readonly map: CityMap;
   readonly statics: StaticWorld;

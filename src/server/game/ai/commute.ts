@@ -126,7 +126,7 @@ export function walkCommute(w: World, p: Ped, goal: Destination, dt: number): vo
     route.crossing = false;
     if (!route.steps.length) {
       p.arrivedAt = goal.lot;
-      if (p.resident) p.resident.occupiedLot = goal.lot;
+      if (p.resident && !p.collectingVin) p.resident.occupiedLot = goal.lot;
     }
   }
 }

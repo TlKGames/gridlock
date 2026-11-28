@@ -60,10 +60,10 @@ function cleanLast(raw: unknown): CharacterLast | null {
   const room = String(l.room ?? '');
   const x = Number(l.x), y = Number(l.y), angle = Number(l.angle);
   if (!/^[A-Z]{4}$/.test(room) || ![x, y, angle].every(Number.isFinite) || x < 0 || y < 0 || x > MAP_SIZE || y > MAP_SIZE) return null;
-  const v = l.vehicle as { type?: unknown; color?: unknown } | undefined;
+  const v = l.vehicle as { type?: unknown; color?: unknown; vin?: unknown } | undefined;
   const type = Number(v?.type), color = Number(v?.color);
   const vehicle = v && Number.isInteger(type) && type >= 0 && type < VEHICLES.length
-    ? { type, color: Number.isInteger(color) && color >= 0 && color < PALETTE.length ? color : 0 } : undefined;
+    ? { type, ...(typeof v.vin === 'string' && /^[a-f0-9-]{36}$/.test(v.vin) ? { vin: v.vin } : {}), color: Number.isInteger(color) && color >= 0 && color < PALETTE.length ? color : 0 } : undefined;
   return { room, x, y, angle, ...(vehicle ? { vehicle } : {}) };
 }
 

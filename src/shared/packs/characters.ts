@@ -58,7 +58,7 @@ export function cleanName(raw: unknown): string {
 export interface CharacterLast {
   room: string;              // room code, for "Continue"
   x: number; y: number; angle: number;
-  vehicle?: { type: number; color: number };
+  vehicle?: { type: number; color: number; vin?: string };
 }
 
 /** What playing changes on a character; the server sends it back for the browser to save. */

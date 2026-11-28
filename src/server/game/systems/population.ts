@@ -107,6 +107,7 @@ export class Population {
     if (this.timer > 0) return;
     this.timer = 0.5;
     this.despawn();
+    this.w.registry.update();
     this.residents?.update();
     this.residents?.resumeWalks();
     for (const pl of this.w.players.values()) {
@@ -211,11 +212,14 @@ export class Population {
       const driver = this.driverFor(type, zone, gang);
       const civil = PEDS[driver].behaviour === 'civilian';
       const resident = civil ? this.residents?.nearby(s.x, s.y) : undefined;
-      if (this.residents && civil && !resident) continue;
+      if (this.residents && civil && (!resident || w.registry.owned('house:' + resident.household)?.size)) continue;
       const v = spawnVehicle(w, type, s.x, s.y, s.angle, gangRide ? gangCarColor(gang) ?? -1 : -1);
       v.body.vx = Math.cos(s.angle) * 8; v.body.vy = Math.sin(s.angle) * 8;
       const d = spawnPed(w, resident?.archetype ? pedIndex(resident.archetype) : driver, s.x, s.y, s.angle);
-      if (resident) this.residents!.bind(resident, d);
+      if (resident) {
+        this.residents!.bind(resident, d);
+        w.registry.register(v, 'house:' + resident.household);
+      }
       seatPed(w, d, v, 0);
       setTask(d, 'drive');
       const rc = roleCrew(type);
@@ -246,6 +250,9 @@ export class Population {
       if (this.spotState.has(si)) continue;
       const s = w.city.parking[si];
       if (w.nearestPlayerDist2(s.x, s.y) < 70 * 70) continue; // don't pop in view
+      let occupied = false;
+      w.vehiclesNear(s.x, s.y, 3, () => { occupied = true; });
+      if (occupied) continue;
       const z = ZONES[s.zone < 0 ? 0 : s.zone];
       const chance = s.lot !== undefined ? 0.3 : z.parkedDensity * 0.16;
       if (!w.rng.chance(chance) || w.vehicles.size > RULES.vehicleCap) { this.spotState.set(si, 0); continue; }
@@ -253,6 +260,8 @@ export class Population {
       const gang = turfGang(w.map.districtAt(s.x, s.y));
       const tint = gang && VEHICLES[type].roles.includes('gang') ? gangCarColor(gang) ?? -1 : -1;
       const v = spawnVehicle(w, type, s.x, s.y, s.angle, tint);
+      const local = this.residents?.nearby(s.x, s.y);
+      if (local && !w.registry.owned('house:' + local.household)?.size) v.parkedHousehold = local.household;
       v.spot = si;
       this.spotState.set(si, v.id);
     }
@@ -315,7 +324,7 @@ export class Population {
       const wreckGone = v.wrecked && ((v.wreckT > 25 && unseen) || (v.wreckT > 120 && near > 35 * 35));
       // Abandoned or hopelessly stuck cars on the street clear once nobody's looking.
       const stalled = v.spot < 0 && v.spot !== -2 && v.idleT > 25 && unseen;
-      if (wreckGone || stalled || (near > far2 && v.spot < 0 && v.spot !== -2)) removeVehicle(w, v);
+      if (wreckGone || stalled || (near > far2 && v.spot < 0 && v.spot !== -2)) removeVehicle(w, v, true);
     }
     for (const p of w.peds.values()) {
       if (p.player || p.persistent || p.vehicle) continue;

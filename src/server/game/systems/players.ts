@@ -175,7 +175,7 @@ function toggleVehicle(w: World, pl: Player, p: Ped): void {
       const o = sid ? w.peds.get(sid) : undefined;
       if (o && !o.player) { unseatPed(w, o, true); onAttacked(w, o, p); }
     }
-  } else if (v.owner !== pl.id && v.stolenBy !== pl.id) {
+  } else if (v.owner !== pl.id && w.registry.get(v)?.owner !== 'player:' + pl.ownerKey && v.stolenBy !== pl.id) {
     crime(w, p, 'vehicleTheft', v.body.x, v.body.y);
   }
   if (v.owner !== pl.id) v.stolenBy = pl.id;

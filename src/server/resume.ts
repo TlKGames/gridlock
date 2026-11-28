@@ -19,9 +19,19 @@ export function resumeSpot(w: World, last: CharacterLast | undefined): Character
 }
 
 /** Puts a resumed character back in the vehicle they were driving (theirs until they leave). */
-export function resumeVehicle(w: World, pl: Player, ped: Ped, spot: CharacterLast): void {
+export function resumeVehicle(w: World, pl: Player, ped: Ped, spot: CharacterLast, room?: string): void {
   const veh = spot.vehicle;
   if (!veh || !VEHICLES[veh.type]) return;
+  if (veh.vin) {
+    if (spot.room !== room) return;
+    const record = w.registry.find(veh.vin);
+    if (!record || record.stored || record.lastDriver !== 'player:' + pl.ownerKey) return;
+    const at = w.registry.location(record);
+    if (Math.hypot(at.x - spot.x, at.y - spot.y) > 12) return;
+    const existing = w.registry.show(record);
+    if (!existing.seats[0] && !existing.wrecked) seatPed(w, ped, existing, 0);
+    return;
+  }
   const spec = VEHICLES[veh.type];
   const v = spawnVehicle(w, veh.type, spot.x, spot.y, spot.angle, veh.color >= 0 && veh.color < PALETTE.length ? veh.color : -1);
   v.body.alt = 0; // helicopters come back on the ground
@@ -44,6 +54,6 @@ export function lastOf(w: World, pl: Player, room: string): CharacterLast | unde
   const r = (n: number) => Math.round(n * 10) / 10;
   return {
     room, x: r(pos.x), y: r(pos.y), angle: Math.round((v ? v.body.angle : p.body.angle) * 100) / 100,
-    ...(v && p.seat === 0 && !v.wrecked ? { vehicle: { type: v.type, color: v.color } } : {}),
+    ...(v && p.seat === 0 && !v.wrecked ? { vehicle: { type: v.type, color: v.color, ...(w.registry.get(v) ? { vin: v.vin } : {}) } } : {}),
   };
 }
