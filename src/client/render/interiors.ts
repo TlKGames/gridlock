@@ -45,7 +45,6 @@ const OLD_PROP: Record<PropKind, string> = {
 const FLOOR = WORLD.modern ? MODERN_FLOOR : OLD_FLOOR;
 const WALL = WORLD.modern ? MODERN_WALL : OLD_WALL;
 const PROP = WORLD.modern ? MODERN_PROP : OLD_PROP;
-const CUT = '#2f3136';
 const FELT = '#1f6b3e';
 /** How close (m) outside a walk-in place you must be for it to open up. */
 const NEAR = 3.2;
@@ -91,7 +90,6 @@ export class Interiors {
         box.add((r.x0 + r.x1) / 2, y, (r.y0 + r.y1) / 2, r.x1 - r.x0, h, r.y1 - r.y0, color);
       add(i.room, 0, 0.06, FLOOR[i.layout]);
       for (const w of i.walls) add(w.rect, 0, i.wallH, WALL[i.layout]);
-      for (const r of i.rest) add(r.rect, 0, i.wallH, CUT);
       // Game tables (world/tables.ts) wear green baize.
       for (const p of i.props) if (!furnished.has(p)) add(p.rect, FLAT.has(p.kind) ? 0.06 : 0, p.h, p.kind === 'table' && felt.has(p) ? FELT : PROP[p.kind]);
       box.build(group);

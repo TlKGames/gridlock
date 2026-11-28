@@ -52,7 +52,7 @@ export class StaticWorld {
     const open = new Set(city.interiors.map((i) => i.building));
     city.buildings.forEach((b, bi) => { if (!open.has(bi)) this.addBox({ ...b.rect, h: b.h }); });
     city.interiors.forEach((i, k) => {
-      for (const w of [...i.walls, ...i.rest]) this.addBox({ ...w.rect, h: w.h });
+      for (const w of i.walls) this.addBox({ ...w.rect, h: w.h });
       for (const p of i.props) if (!FLAT_PROPS.has(p.kind)) this.addBox({ ...p.rect, h: p.h });
       if (i.vault) this.addBox({ ...i.vault.door, h: 3.2, gate: k });
       // Upper floors, out in their strips east of the map (world/levels.ts).

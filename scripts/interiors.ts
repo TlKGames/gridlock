@@ -21,6 +21,12 @@ const me = w.peds.get(pl.pid)!;
 check(city.interiors.length >= 20, `walk-in places: ${city.interiors.length}`);
 check(city.interiors.every((i) => i.place.counter && i.walls.length >= 5), 'each has a shell and a counter');
 
+check(city.interiors.every((i) => {
+  const b = city.lots[i.place.lot].building!.rect;
+  const offsets = [i.room.x0 - b.x0, i.room.y0 - b.y0, b.x1 - i.room.x1, b.y1 - i.room.y1];
+  return offsets.every((offset) => Math.abs(offset - 0.3) < 1e-6);
+}), 'every ground floor reaches all four exterior walls');
+
 /** Walks a person body from a to b in small steps; returns where they end up. */
 function walk(from: { x: number; y: number }, to: { x: number; y: number }, seconds = 12): { x: number; y: number } {
   const b = { x: from.x, y: from.y, angle: 0, vx: 0, vy: 0, av: 0, alt: 0 };

@@ -1,7 +1,6 @@
 // Walk-in ground floors for places whose pack spec names a layout (`interior`). Worked out from the
-// city alone, so server physics, client prediction and drawing agree. Each is a room behind the
-// storefront door (up to a size per layout, the rest of the building stays solid): a shell of walls
-// with a gap at the door (people fit, cars don't), partitions, solid furniture, the counter where you
+// city alone, so server physics, client prediction and drawing agree. Each fills its building footprint:
+// a shell of walls with a gap at the door (people fit, cars don't), partitions, solid furniture, the counter where you
 // do business and the spot where the clerk stands.
 import type { Rect } from '../math';
 import { INTERIOR_PLANS, type InteriorLayout, PROPERTIES, RULES, SERVICES } from '../packs';
@@ -26,7 +25,6 @@ export interface Interior {
   /** Wall height: the drawn cutaway and the solid walls agree on it. */
   wallH: number;
   walls: Box[];         // shell (with the door gap) and partitions
-  rest: Box[];          // the parts of the building outside the room: solid, drawn as a cut block
   props: Prop[];        // solid furniture (the dance floor is a floor patch, not solid)
   counter: Spot;        // where a customer stands to do business
   clerk: Spot;          // where the clerk stands
@@ -46,11 +44,6 @@ export interface Interior {
 }
 
 const T = 0.3, GAP = 1.6, WALL_H = 2.8;
-/** Largest room per layout (across the frontage, then in depth); smaller buildings use all they have. */
-const SIZE: Partial<Record<InteriorLayout, [number, number]>> = {
-  shop: [16, 13], kiosk: [16, 8], diner: [18, 14], club: [22, 18], saloon: [20, 16], warehouse: [28, 22], tower: [22, 18], apartments: [18, 15],
-};
-
 /** The local frame: `a` across the frontage, `d` in from the front wall. */
 function frame(lot: Lot) {
   const b = lot.building!.rect, f = lot.front;
@@ -78,15 +71,11 @@ function frame(lot: Lot) {
 function build(place: Place, property: boolean, building: number, lot: Lot, layout: InteriorLayout): Interior | null {
   const F = frame(lot);
   const plan = INTERIOR_PLANS[layout];
-  const size = plan ? [plan.w, plan.d] : SIZE[layout];
-  if (!size) return null;
-  const [maxW, maxD] = size;
   if (F.W < 7 || F.D < 6 || (plan && (F.W < plan.w || F.D < plan.d))) return null;
   const doorA = F.along ? place.x - F.b.x0 : place.y - F.b.y0;
-  const Wr = Math.min(F.W, maxW), Dr = Math.min(F.D, maxD);
-  const a0 = Math.max(0, Math.min(F.W - Wr, doorA - Wr / 2)), a1 = a0 + Wr;
+  const a0 = 0, a1 = F.W, Dr = F.D;
   if (doorA - GAP / 2 < a0 + T || doorA + GAP / 2 > a1 - T) return null;
-  const walls: Box[] = [], rest: Box[] = [], props: Prop[] = [];
+  const walls: Box[] = [], props: Prop[] = [];
   const h = lot.building!.h;
   const wall = (aa0: number, aa1: number, d0: number, d1: number, wh = h) => { if (aa1 - aa0 > 0.05 && d1 - d0 > 0.05) walls.push({ rect: F.rect(aa0, aa1, d0, d1), h: wh }); };
   const prop = (kind: PropKind, aa0: number, aa1: number, d0: number, d1: number, ph: number) => props.push({ kind, rect: F.rect(aa0, aa1, d0, d1), h: ph });
@@ -96,24 +85,27 @@ function build(place: Place, property: boolean, building: number, lot: Lot, layo
   wall(a0, a0 + T, 0, Dr);
   wall(a1 - T, a1, 0, Dr);
   wall(a0, a1, Dr - T, Dr);
-  // Everything else in the building is solid.
-  if (a0 > 0.05) rest.push({ rect: F.rect(0, a0, 0, F.D), h });
-  if (a1 < F.W - 0.05) rest.push({ rect: F.rect(a1, F.W, 0, F.D), h });
-  if (Dr < F.D - 0.05) rest.push({ rect: F.rect(a0, a1, Dr, F.D), h });
-
   const ia0 = a0 + T, ia1 = a1 - T, iD = Dr - T; // inside faces
   const front = F.inward + Math.PI; // facing the street
   if (plan) {
-    // Hand-made: the plan's pieces, measured from the room's left edge.
-    const R = (r: [number, number, number, number]) => F.rect(a0 + r[0], a0 + r[1], r[2], r[3]);
-    const P = (p: [number, number], face: number): Spot => ({ ...F.point(a0 + p[0], p[1]), angle: face });
-    for (const w of plan.walls) walls.push({ rect: R(w.r), h: w.h ?? WALL_H });
+    // Keep the casino aisles aligned with the entrance. Other plans anchor their
+    // secure rooms at the back. Fixtures and door gaps keep their designed sizes.
+    const left = Math.max(0, Math.min(F.W - plan.w, doorA - plan.w / 2));
+    const backOffset = layout === 'casino' ? 0 : F.D - plan.d;
+    const R = (r: [number, number, number, number]) => F.rect(left + r[0], left + r[1], backOffset + r[2], backOffset + r[3]);
+    const P = (p: [number, number], face: number): Spot => ({ ...F.point(left + p[0], backOffset + p[1]), angle: face });
+    for (const { r, h } of plan.walls) {
+      const lo = r[0] <= T ? ia0 : left + r[0];
+      const hi = r[1] >= plan.w - T ? ia1 : left + r[1];
+      const end = r[3] >= plan.d - T ? iD : backOffset + r[3];
+      wall(lo, hi, backOffset + r[2], end, h ?? WALL_H);
+    }
     for (const p of plan.props) props.push({ kind: p.kind, rect: R(p.r), h: p.h });
     return {
-      place, property, building, layout, room: F.rect(ia0, ia1, T, iD), wallH: WALL_H, walls, rest, props,
+      place, property, building, layout, room: F.rect(ia0, ia1, T, iD), wallH: WALL_H, walls, props,
       counter: P(plan.counter, F.inward), clerk: P(plan.clerk, front), clerkArch: plan.clerkArch ?? RULES.clerk,
       guards: (plan.guards ?? []).map((g) => ({ spot: P(g.at, front), arch: g.arch })),
-      ...(plan.vault ? { vault: { door: R(plan.vault.door), room: R(plan.vault.room), cash: plan.vault.cash.map((c) => F.point(a0 + c[0], c[1])) } } : {}),
+      ...(plan.vault ? { vault: { door: R(plan.vault.door), room: F.rect(left + plan.vault.room[0], plan.vault.room[1] >= plan.w - T ? ia1 : left + plan.vault.room[1], backOffset + plan.vault.room[2], backOffset + plan.vault.room[3]), cash: plan.vault.cash.map((c) => F.point(left + c[0], backOffset + c[1])) } } : {}),
       floors: [],
     };
   }
@@ -142,7 +134,7 @@ function build(place: Place, property: boolean, building: number, lot: Lot, layo
       clerk = counter;
     }
     return {
-      place, property, building, layout, room: F.rect(ia0, ia1, T, iD), wallH: WALL_H, walls, rest, props, counter, clerk,
+      place, property, building, layout, room: F.rect(ia0, ia1, T, iD), wallH: WALL_H, walls, props, counter, clerk,
       clerkArch: tower ? RULES.clerk : '', guards: [],
       lift: tower || !stairs ? at(am, iD - 1.8, front) : stairs.landing,
       floors: upperFloors(layout, n, ia0, ia1, T, iD, F.rect, F.point, front, plan, F.inward),
@@ -216,7 +208,7 @@ function build(place: Place, property: boolean, building: number, lot: Lot, layo
     counter = at(ia0 + 1.6, 3.0, front + Math.PI);
     clerk = at(ia0 + 1.6, 0.9 + T, F.inward);
   }
-  return { place, property, building, layout, room: F.rect(ia0, ia1, T, iD), wallH: WALL_H, walls, rest, props, counter, clerk, clerkArch: RULES.clerk, guards: [], floors: [] };
+  return { place, property, building, layout, room: F.rect(ia0, ia1, T, iD), wallH: WALL_H, walls, props, counter, clerk, clerkArch: RULES.clerk, guards: [], floors: [] };
 }
 
 /** Every walk-in place in the city. */
