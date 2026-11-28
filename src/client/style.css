@@ -138,6 +138,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 /* Riding with the mouse behind you: you can't shoot there. */
 .crosshair.on.blocked { opacity: 0.4; }
 .crosshair.blocked i { background: #ff5a4a; }
+.crosshair span { position: absolute; bottom: 8px; white-space: nowrap; color: white; background: #141821e8; border-radius: 3px; padding: 3px 6px; font: 600 13px system-ui, sans-serif; }
+.crosshair span:empty { display: none; }
+.crosshair.on:has(span:not(:empty)) { opacity: 1; }
 .crosshair i { position: absolute; background: #f4f1e8; box-shadow: 0 0 0 1px rgba(0,0,0,0.65); }
 .crosshair i:nth-child(1), .crosshair i:nth-child(2) { width: 2px; height: 10px; left: -1px; }
 .crosshair i:nth-child(1) { top: -16px; }

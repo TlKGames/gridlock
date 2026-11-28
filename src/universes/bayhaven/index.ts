@@ -68,6 +68,8 @@ export const BAYHAVEN: Universe = {
   },
   defaultLook: { skin: 0, hair: 1, hairStyle: 0, top: 0, bottom: 0, hat: 0 },
   nameParts: {
+    male: ['Ace', 'Benny', 'Dax', 'Eddie', 'Frankie', 'Hector', 'Jojo', 'Lou', 'Mack', 'Nico', 'Ozzy', 'Quinn', 'Rocco', 'Sal', 'Vinnie', 'Wren', 'Yuri', 'Zed', 'Remy', 'Marco', 'Tito'],
+    female: ['Carmen', 'Frankie', 'Gigi', 'Ivy', 'Jojo', 'Kat', 'Lou', 'Pia', 'Quinn', 'Tess', 'Wren', 'Remy', 'Lola', 'Dina', 'Bea'],
     first: ['Ace', 'Benny', 'Carmen', 'Dax', 'Eddie', 'Frankie', 'Gigi', 'Hector', 'Ivy', 'Jojo', 'Kat', 'Lou', 'Mack', 'Nico',
       'Ozzy', 'Pia', 'Quinn', 'Rocco', 'Sal', 'Tess', 'Vinnie', 'Wren', 'Yuri', 'Zed', 'Remy', 'Lola', 'Marco', 'Dina', 'Tito', 'Bea'],
     last: ['Moretti', 'Kane', 'Vega', 'Doyle', 'Sloane', 'Petrov', 'Reyes', 'Malone', 'Okafor', 'Brandt', 'Falco', 'Quill', 'Hale',

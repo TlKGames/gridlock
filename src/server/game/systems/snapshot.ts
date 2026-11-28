@@ -63,10 +63,13 @@ export function buildSnapshot(w: World, pl: Player): S2C {
     return open && isWayStrip(g.f) && (g.x - below.x) ** 2 + (g.y - below.y) ** 2 < r2;
   };
 
+  const names: [number, string][] = [];
+  const full = pl.snapCount % FULL_SNAP_EVERY === 0;
   const addPed = (p: Ped) => {
     if (p.vehicle || !near(p.body.x, p.body.y)) return;
+    if (p.npcName && !p.player && (full || !pl.sent.has(p.id))) names.push([p.id, p.npcName]);
     const h = p.weapons[p.wi];
-    e.push([p.id, EK.Ped, p.arch, r2(p.body.x), r2(p.body.y), a2(p.body.angle), pedFlags(p), h ? h.w : -1]);
+    e.push([p.id, EK.Ped, p.arch, r2(p.body.x), r2(p.body.y), a2(p.body.angle), pedFlags(p), h ? h.w : -1, 0, 0, p.resident?.id ?? 0]);
   };
   w.pedHash.query(center.x, center.y, R, addPed);
   if (below.f > 0) w.pedHash.query(below.x, below.y, R, addPed);
@@ -77,15 +80,19 @@ export function buildSnapshot(w: World, pl: Player): S2C {
     // Overall state in the low 2 bits, then each side's dent level (front, rear, left, right), 2 bits each.
     const overall = v.wrecked ? 3 : v.hp < v.spec.hp * 0.35 ? 2 : v.hp < v.spec.hp * 0.7 ? 1 : 0;
     const dmg = damageLevels(v).reduce((acc, l, i) => acc | (l << (2 + i * 2)), overall);
-    e.push([v.id, EK.Veh, v.type, r2(v.body.x), r2(v.body.y), a2(v.body.angle), v.color, vehFlags(w, v), a2(v.body.alt), a2(v.turret), dmg, v.spec.trailer ? a2(v.trailer) : 0]);
+    const driver = w.peds.get(v.seats[0]);
+    const driverId = driver && !driver.player && driver.npcName ? driver.id : 0;
+    if (full || !pl.sent.get(v.id)?.endsWith(',' + driverId)) names.push([v.id, driverId ? driver!.npcName! : '']);
+    e.push([v.id, EK.Veh, v.type, r2(v.body.x), r2(v.body.y), a2(v.body.angle), v.color, vehFlags(w, v), a2(v.body.alt), a2(v.turret), dmg, v.spec.trailer ? a2(v.trailer) : 0, driverId]);
     // Riders sit in plain sight (bikes, open-top cars): sent as peds carrying the vehicle and the seat they're on.
     const saddles = v.spec.saddles;
     if (saddles) {
       v.seats.forEach((pid, seat) => {
         const p = pid && seat < saddles.length ? w.peds.get(pid) : undefined;
         if (!p) return;
+        if (p.npcName && !p.player && (full || !pl.sent.has(p.id))) names.push([p.id, p.npcName]);
         const h = p.weapons[p.wi];
-        e.push([p.id, EK.Ped, p.arch, r2(v.body.x), r2(v.body.y), a2(v.body.angle), pedFlags(p), h ? h.w : -1, v.id, seat]);
+        e.push([p.id, EK.Ped, p.arch, r2(v.body.x), r2(v.body.y), a2(v.body.angle), pedFlags(p), h ? h.w : -1, v.id, seat, p.resident?.id ?? 0]);
       });
     }
   }
@@ -100,7 +107,7 @@ export function buildSnapshot(w: World, pl: Player): S2C {
   }
   const fx = w.fx.filter((ev) => ID_EVENTS.has(ev[0]) || near(ev[1], ev[2], R2 * 1.3));
   const { changed, kept } = delta(pl, e);
-  return { t: 's', st: Math.round(w.time * 1000), ack: pl.ack, gt: Math.round(w.gameMinutes * 10) / 10, you: youState(w, pl, me), e: changed, k: kept, fx };
+  return { t: 's', st: Math.round(w.time * 1000), ack: pl.ack, gt: Math.round(w.gameMinutes * 10) / 10, you: youState(w, pl, me), e: changed, k: kept, fx, names };
 }
 
 /** Splits entities into changed (sent in full) and unchanged (sent as ids only). */

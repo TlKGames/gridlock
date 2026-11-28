@@ -18,6 +18,9 @@ export interface Household {
 export interface Resident {
   id: number;
   household: number;
+  identity?: { name: string; gender: 'male' | 'female' };
+  archetype?: string;
+  deceased?: boolean;
   job: { lot: number; start: number; duration: number } | null;
 }
 

@@ -205,6 +205,7 @@ export function revive(w: World, p: Ped, dt: number): boolean {
   ai.workT += dt;
   if (ai.workT < 3) return false;
   body.dead = false;
+  if (body.resident) delete body.resident.deceased;
   body.hp = body.spec.hp * 0.5;
   body.revived = true;
   const scene = w.squads.get(ai.squad)?.incident;

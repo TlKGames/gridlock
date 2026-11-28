@@ -64,7 +64,7 @@ export class Room {
     this.census = save?.census ?? createCensus(w.city, seed);
     if (save) w.gameMinutes = save.gameMinutes;
     this.profiles = Object.assign(Object.create(null), save?.profiles);
-    this.pop = new Population(w);
+    this.pop = new Population(w, this.census);
     this.dispatch = new Dispatch(w);
     this.econ = new Economy(w);
     this.missions = new Missions(w);

@@ -4,7 +4,7 @@ import type { CharacterProgress, CharacterSave, CharLook } from './packs/charact
 export const TICK_HZ = 30;
 export const SNAP_EVERY = 2;             // snapshots at 15 Hz
 export const INTERP_DELAY_MS = 120;
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 /** Every Nth snapshot carries every entity in full (others list unchanged ones in `k`). */
 export const FULL_SNAP_EVERY = 30;
 
@@ -131,7 +131,7 @@ export type S2C =
   /** `universe`: the room is in that universe (the page switches to it and asks again). */
   | { t: 'reject'; reason: string; universe?: string }
   /** e: changed/new entities; k: ids still in view and unchanged since the last snapshot. */
-  | { t: 's'; st: number; ack: number; gt: number; you: YouState; e: number[][]; k: number[]; fx: number[][] }
+  | { t: 's'; st: number; ack: number; gt: number; you: YouState; e: number[][]; k: number[]; names?: [number, string][]; fx: number[][] }
   | { t: 'players'; list: PlayerInfo[] }
   | { t: 'owners'; list: [number, string | null][] }
   | { t: 'profile'; p: Profile }

@@ -45,6 +45,7 @@ function wallBases(m: Mass, group: Mass[]): number[] {
 type CityMass = Mass & { owner: number; front: number; wallBases: number[] };
 
 export class CityMeshes {
+  readonly shells: THREE.InstancedMesh[] = [];
   readonly uniforms: BuildingUniforms;
   readonly lamps: LampSpot[];
   readonly props: StreetProps;
@@ -131,6 +132,7 @@ export class CityMeshes {
       mesh.receiveShadow = true;
       mesh.computeBoundingSphere();
       mesh.matrixAutoUpdate = false;
+      this.shells.push(mesh);
       scene.add(mesh);
     }
     return uniforms;

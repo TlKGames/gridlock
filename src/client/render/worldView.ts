@@ -14,6 +14,7 @@ import type { Effects } from './effects';
 import { animatePed, HIP_H, makePed, muzzleOf, PED_S, type PedView, ridePed, setPedWeapon, SWING_TIME } from './pedMesh';
 import { lampMaterial, makeVehicle, showDamage, sirenMats, type VehicleView } from './vehicleMesh';
 import { decodeDamage } from './vehicleDamage';
+import { NpcPicker } from './npcPicker';
 import { Skids } from './skids';
 import type { BridgeFade } from './water';
 import type { RailFade } from './railFade';
@@ -100,7 +101,7 @@ export class WorldView {
   /** Tyre marks and smoke; `skids.squeal` is the hardest slide this frame, for the tyre sound. */
   readonly skids = new Skids();
 
-  constructor(private scene: THREE.Scene, private fx: Effects, private lamps: { x: number; y: number; off?: boolean }[], private railFade?: RailFade, private bridgeFade?: BridgeFade) {}
+  constructor(private scene: THREE.Scene, private fx: Effects, private lamps: { x: number; y: number; off?: boolean }[], private shells: THREE.InstancedMesh[], private railFade?: RailFade, private bridgeFade?: BridgeFade) {}
 
   sync(store: EntityStore, dt: number, own: OwnState | null, tags: Map<number, PlayerTag>, night: number, view: { x0: number; y0: number; x1: number; y1: number }): void {
     this.time += dt;
@@ -123,6 +124,14 @@ export class WorldView {
     if (night > 0.05) this.lampGlows(night, view);
     this.fx.glow.update(dt);
     this.fx.beams.update(dt);
+  }
+
+  private npcPicker = new NpcPicker();
+
+  hoverName(camera: THREE.Camera, x: number, y: number): string {
+    if (!this.store) return '';
+    return this.npcPicker.pick(camera, x / window.innerWidth * 2 - 1, 1 - y / window.innerHeight * 2,
+      this.store, this.peds, this.vehs, this.shells);
   }
 
   private prune(seen: Set<number>): void {
@@ -152,7 +161,7 @@ export class WorldView {
     const want = tag ? `${tag.color}:${tag.look ? JSON.stringify(tag.look) : ''}` : '';
     if (v && v.lookKey !== want) { v.root.removeFromParent(); this.peds.delete(e.id); this.dropTag(e.id); v = undefined; }
     if (!v) {
-      v = makePed(e.id, d[2], tag?.color ?? null, tag?.look);
+      v = makePed(d[10] || e.id, d[2], tag?.color ?? null, tag?.look);
       v.lookKey = want;
       this.peds.set(e.id, v);
       this.scene.add(v.root);

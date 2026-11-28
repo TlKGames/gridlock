@@ -1,6 +1,7 @@
 // Character creator: big preview, name with a dice roll, look swatches, randomization and preview rotation
 // Ctrl+Z / Ctrl+Y still undo or redo edits outside the name field.
-import { CHARACTER_LOOKS, type CharLook, LOOK_PARTS, type LookPart, NAME_PARTS, PLAYER_VOICES, youLineId } from '../../shared/packs';
+import { CHARACTER_LOOKS, type CharLook, LOOK_PARTS, type LookPart, PLAYER_VOICES, youLineId } from '../../shared/packs';
+import { generateName } from '../../shared/packs/characters';
 import { clipOf } from '../audio/voiceClips';
 import { CreatorPreview } from './creatorPreview';
 import { figureCanvas } from './figure';
@@ -20,14 +21,7 @@ function playSample(voice: string): void {
 
 const LABEL: Record<LookPart, string> = { skin: 'Skin', hair: 'Hair colour', hairStyle: 'Hairstyle', top: 'Top', bottom: 'Trousers', hat: 'Hat' };
 const rnd = (n: number) => Math.floor(Math.random() * n);
-const pick = <T>(a: T[]): T => a[rnd(a.length)];
-
-export function rollName(): string {
-  for (;;) {
-    const n = `${pick(NAME_PARTS.first)} ${pick(NAME_PARTS.last)}`;
-    if (n.length <= 16) return n;
-  }
-}
+export const rollName = () => generateName(Math.random);
 
 /** A random look; hats only sometimes. */
 export function randomLook(hats = true): CharLook {

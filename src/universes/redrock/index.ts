@@ -103,6 +103,8 @@ export const REDROCK: Universe = {
   },
   defaultLook: { skin: 0, hair: 1, hairStyle: 0, top: 1, bottom: 0, hat: 1 },
   nameParts: {
+    male: ['Abe', 'Clem', 'Eli', 'Jeb', 'Josiah', 'Ned', 'Orrin', 'Percy', 'Silas', 'Tobias', 'Wade', 'Zeke', 'Amos', 'Cyrus', 'Dell', 'Ezra', 'Luke', 'Rufus'],
+    female: ['Clem', 'Cora', 'Etta', 'Hattie', 'Lottie', 'Mabel', 'Ruth', 'Nell', 'Belle', 'Dell', 'Ida', 'Mattie'],
     first: ['Abe', 'Clem', 'Cora', 'Eli', 'Etta', 'Hattie', 'Jeb', 'Josiah', 'Lottie', 'Mabel', 'Ned', 'Orrin', 'Percy', 'Ruth',
       'Silas', 'Tobias', 'Wade', 'Zeke', 'Nell', 'Amos', 'Belle', 'Cyrus', 'Dell', 'Ezra', 'Ida', 'Luke', 'Mattie', 'Rufus'],
     last: ['Bright', 'Dunn', 'Fairbanks', 'Grady', 'Holt', 'Keene', 'Larkin', 'Pruitt', 'Sutter', 'Tate', 'Vance', 'Wheeler',

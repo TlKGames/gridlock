@@ -36,6 +36,7 @@ export function damagePed(w: World, v: Ped, amount: number, attackerId: number, 
 /** `byVehicle`: run down by the killer's vehicle (vehicular homicide rather than murder). */
 export function killPed(w: World, v: Ped, killer: Ped | null, byVehicle = false): void {
   v.dead = true;
+  if (v.resident) v.resident.deceased = true;
   v.deadT = 0;
   v.hp = 0;
   v.burning = 0;

@@ -1,4 +1,6 @@
 // Creating, seating and removing entities.
+import { generateName } from '../../shared/packs/characters';
+import { Rng } from '../../shared/rng';
 import { PEDS, UNARMED, VEHICLES, WEAPONS, paletteFor, weaponIndex } from '../../shared/packs';
 import { emptyControls, newBody } from '../../shared/sim/physics';
 import type { Ai, HeldWeapon, Ped, Vehicle } from './entities';
@@ -27,6 +29,10 @@ export function spawnPed(w: World, arch: number, x: number, y: number, angle = 0
     vehicle: 0, seat: -1, player: null, ai: withAi ? newAi() : null,
     lastHitBy: 0, lastHitT: -99, persistent: false, revived: false, swimT: 0, jumpT: 0,
   };
+  if (withAi) {
+    const rng = new Rng(w.seed ^ Math.imul(p.id, 2654435761));
+    p.npcName = generateName(() => rng.next(), rng.chance(0.5) ? 'female' : 'male');
+  }
   w.peds.set(p.id, p);
   return p;
 }

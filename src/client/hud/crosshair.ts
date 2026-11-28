@@ -25,6 +25,7 @@ export function zoomFloor(input: Input): number {
 
 export class Crosshair {
   private el = document.createElement('div');
+  private label = document.createElement('span');
   private v = new THREE.Vector3();
   private shown = false;
   private aiming = false;
@@ -33,12 +34,13 @@ export class Crosshair {
   constructor(parent: HTMLElement) {
     this.el.className = 'crosshair';
     this.el.innerHTML = '<i></i><i></i><i></i><i></i><b></b>';
+    this.el.appendChild(this.label);
     parent.appendChild(this.el);
   }
 
   /** Every frame, after rendering: `at` is your character (world x, height, y), or null; `scope`
    *  the camera's aim zoom right now (1 = none). */
-  update(camera: THREE.Camera, at: { x: number; h: number; y: number } | null, input: Input, scope: number): void {
+  update(camera: THREE.Camera, at: { x: number; h: number; y: number } | null, input: Input, scope: number, hover: (x: number, y: number) => string): void {
     if (at) {
       this.v.set(at.x, at.h, at.y).project(camera);
       input.anchorX = (this.v.x * 0.5 + 0.5) * window.innerWidth;
@@ -53,6 +55,10 @@ export class Crosshair {
     const p = input.crosshair();
     // Zoomed in, the spot the mouse marks sits 1 / scope times further out from you.
     const x = input.anchorX + (p.x - input.anchorX) / scope, y = input.anchorY + (p.y - input.anchorY) / scope;
+    const name = hover(x, y);
+    if (this.label.textContent !== name) this.label.textContent = name;
+    this.label.style.right = x > window.innerWidth / 2 ? '12px' : 'auto';
+    this.label.style.left = x > window.innerWidth / 2 ? 'auto' : '12px';
     this.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
   }
 }

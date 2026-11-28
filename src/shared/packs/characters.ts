@@ -17,13 +17,24 @@ export type CharLook = Record<LookPart, number>;
 export const DEFAULT_LOOK: CharLook = { skin: 0, hair: 0, hairStyle: 0, top: 0, bottom: 0, hat: 0 };
 
 /** Parts the creator's random names are rolled from (kept short: names cap at 16 characters). */
-export const NAME_PARTS: { first: string[]; last: string[] } = { first: [], last: [] };
+export const NAME_PARTS: Universe['nameParts'] = { first: [], last: [], male: [], female: [] };
+
+export type Gender = 'male' | 'female';
+
+export function generateName(random: () => number, gender?: Gender): string {
+  const first = gender ? NAME_PARTS[gender] : NAME_PARTS.first;
+  for (;;) {
+    const given = first[Math.floor(random() * first.length)];
+    const family = NAME_PARTS.last[Math.floor(random() * NAME_PARTS.last.length)];
+    const name = given + ' ' + family;
+    if (name.length <= 16) return name;
+  }
+}
 
 export function installLooks(u: Universe): void {
   for (const k of LOOK_PARTS) CHARACTER_LOOKS[k] = u.looks[k];
   Object.assign(DEFAULT_LOOK, u.defaultLook);
-  NAME_PARTS.first = u.nameParts.first;
-  NAME_PARTS.last = u.nameParts.last;
+  Object.assign(NAME_PARTS, u.nameParts);
 }
 
 /** Clamps untrusted look data to valid palette indices. */

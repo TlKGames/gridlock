@@ -668,7 +668,7 @@ export interface Universe {
    *  and the parts random names are rolled from. */
   looks: Record<LookPart, string[]>;
   defaultLook: Record<LookPart, number>;
-  nameParts: { first: string[]; last: string[] };
+  nameParts: { male: string[]; female: string[]; first: string[]; last: string[] };
   /** Body armour's model in the gun shop. */
   armorModel: WeaponPart[];
   /** Street furniture vehicles can knock over (none: bare streets). */

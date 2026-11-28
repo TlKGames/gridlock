@@ -125,7 +125,7 @@ export class Game {
     this.fx = new Effects(this.stage.scene, this.stage.flash);
     this.railway = new RailwayView(this.stage.scene, city, (x, y) => this.map.isWater(x, y));
     this.water = new Water(this.stage.scene, this.map);
-    this.view = new WorldView(this.stage.scene, this.fx, meshes.lamps, this.railway.fade, this.water.fade);
+    this.view = new WorldView(this.stage.scene, this.fx, meshes.lamps, meshes.shells, this.railway.fade, this.water.fade);
     this.input = new Input(canvas);
     this.predict = new Predictor(statics, this.map);
     this.furniture = meshes.furniture;
@@ -285,7 +285,7 @@ export class Game {
     switch (m.t) {
       case 's':
         if (!this.you) document.getElementById('loading')!.hidden = true;
-        this.store.ingest(m.st, m.e, m.k);
+        this.store.ingest(m.st, m.e, m.k, m.names);
         this.gameMinutes = m.gt;
         this.you = m.you;
         this.predict.reconcile(m.you, m.ack);
@@ -341,6 +341,8 @@ export class Game {
     if (ent) return { pid: y.pid, vid: y.vid, driving: false, x: ent.x, y: ent.y, angle: ent.angle, alt: ent.alt, vx: ent.vx, vy: ent.vy };
     return { pid: y.pid, vid: y.vid, driving: false, x: y.body[0], y: y.body[1], angle: y.body[2], alt: y.body[6], vx: 0, vy: 0 };
   }
+
+  private hoverName = (x: number, y: number) => this.view.hoverName(this.stage.camera, x, y);
 
   private aimAngle = 0;
   private hudFrame = 0;
@@ -436,7 +438,7 @@ export class Game {
     // Call bubbles hang beside your head (upstairs: over your building, at your floor's height).
     this.talk.update(this.stage.camera, own && up ? { x: up.x, h: upH + own.alt + 2.9, y: up.y } : null);
     // Aim held: a crosshair out the way you're aiming.
-    this.crosshair.update(this.stage.camera, own && up ? { x: up.x, h: upH + own.alt + 1.2, y: up.y } : null, this.input, this.cam.scope);
+    this.crosshair.update(this.stage.camera, own && up ? { x: up.x, h: upH + own.alt + 1.2, y: up.y } : null, this.input, this.cam.scope, this.hoverName);
     this.offscreen.update(this.stage.camera, this.players, this.myId, (p) => this.playerSpot(p), this.jobs.it);
     this.updateHud(own, disp);
   }

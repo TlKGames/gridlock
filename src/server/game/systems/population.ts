@@ -10,6 +10,8 @@ import type { World } from '../world';
 import { gangCarColor, gangMember, pedPool, turfGang } from '../../../shared/world/gangTurf';
 import { laneSpawn, pedSpawn } from './spawnPoints';
 import { groundOf } from '../../../shared/world/levels';
+import { ResidentPool } from '../residentPool';
+import type { Census } from '../census';
 import { mooredBoats } from './moorings';
 
 /** Gang rides added to the traffic on turf. */
@@ -35,7 +37,10 @@ export class Population {
   private spotBuckets = new Map<number, number[]>();
   private timer = 0;
 
-  constructor(private w: World) {
+  private residents?: ResidentPool;
+
+  constructor(private w: World, census?: Census) {
+    if (census) this.residents = new ResidentPool(w, census);
     w.city.parking.forEach((s, i) => {
       const k = Math.floor(s.y / BUCKET) * 64 + Math.floor(s.x / BUCKET);
       let arr = this.spotBuckets.get(k);
@@ -147,8 +152,11 @@ export class Population {
       const spec = PEDS[arch];
       const group = spec.behaviour === 'gang' ? w.rng.int(2, 4) : 1;
       for (let g = 0; g < group; g++) {
-        const p = spawnPed(w, arch, s.spot.x + g * 0.9, s.spot.y + g * 0.6, s.spot.angle);
-        this.initNpc(p, spec, s.spot, s.block.id);
+        const resident = spec.behaviour === 'civilian' ? this.residents?.nearby(s.spot.x, s.spot.y) : undefined;
+        if (this.residents && spec.behaviour === 'civilian' && !resident) continue;
+        const p = spawnPed(w, resident?.archetype ? pedIndex(resident.archetype) : arch, s.spot.x + g * 0.9, s.spot.y + g * 0.6, s.spot.angle);
+        if (resident) this.residents!.bind(resident, p);
+        this.initNpc(p, p.spec, s.spot, s.block.id);
       }
     }
   }
@@ -194,9 +202,14 @@ export class Population {
       const type = vehicleIndex(w.rng.weighted(pool).id);
       const sp = VEHICLES[type];
       const gangRide = gang && sp.roles.includes('gang');
+      const driver = this.driverFor(type, zone, gang);
+      const civil = PEDS[driver].behaviour === 'civilian';
+      const resident = civil ? this.residents?.nearby(s.x, s.y) : undefined;
+      if (this.residents && civil && !resident) continue;
       const v = spawnVehicle(w, type, s.x, s.y, s.angle, gangRide ? gangCarColor(gang) ?? -1 : -1);
       v.body.vx = Math.cos(s.angle) * 8; v.body.vy = Math.sin(s.angle) * 8;
-      const d = spawnPed(w, this.driverFor(type, zone, gang), s.x, s.y, s.angle);
+      const d = spawnPed(w, resident?.archetype ? pedIndex(resident.archetype) : driver, s.x, s.y, s.angle);
+      if (resident) this.residents!.bind(resident, d);
       seatPed(w, d, v, 0);
       setTask(d, 'drive');
       const rc = roleCrew(type);
