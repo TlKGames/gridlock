@@ -11,6 +11,7 @@ export type TaskName = 'wander' | 'stand' | 'flee' | 'attack' | 'arrest' | 'driv
 export interface DriveState {
   merging?: boolean;
   curbBlocker?: number;
+  borrowedLane?: boolean;
   junctionWait?: number;
   pts: { x: number; y: number; stop?: number; lanes?: number; axis?: 'h' | 'v' }[];
   seg: number; dir: 1 | -1; lane: number;

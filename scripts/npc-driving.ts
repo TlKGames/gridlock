@@ -173,3 +173,31 @@ for (let i = 0; i < 30 * 50 && !cleared; i++) {
 }
 assert(cleared, 'a permanently blocked exit does not strand traffic when a legal alternate is open');
 console.log('Curbside queue and blocked-exit recovery passed');
+
+// A box truck must cross the centre line to clear this crooked taxi near a stop line.
+for (const traffic of [false, true]) {
+  w.vehicles.clear(); w.peds.clear();
+  const end = laneOf(w, narrow, -1, 0);
+  const cab = spawnVehicle(w, vehicleIndex('taxi'), end.ex + 16, end.ey - 1.75, Math.PI + 0.39);
+  if (traffic) seatPed(w, spawnPed(w, pedIndex('civilian'), cab.body.x, cab.body.y), cab, 0);
+  const truck = spawnVehicle(w, vehicleIndex('boxtruck'), cab.body.x + 6.7, end.ey, Math.PI);
+  const operator = spawnPed(w, pedIndex('civilian'), truck.body.x, truck.body.y);
+  seatPed(w, operator, truck, 0);
+  const other = traffic ? driver(cab.body.x - 30, narrow.y0 + 1.8, 0).car : undefined;
+  if (other) other.body.vx = 9;
+  let crossed = false;
+  for (let tick = 0; tick < 900 && truck.body.x > end.ex + 1; tick++) {
+    w.time += 1/30; w.rebuildHashes();
+    cruise(w, truck, operator, 1/30);
+    stepVehicle(truck.body, truck.spec, truck.ctl, 1/30, w.statics, true);
+    if (other) other.body.x += other.body.vx / 30;
+    if (other && other.body.x < truck.body.x + 5) assert(truck.body.y < narrow.y0, 'wait for the approaching car');
+    crossed ||= truck.body.y > narrow.y0;
+    for (const o of other ? [cab, other] : [cab]) {
+      assert(!obbVsObb({ ...truck.body, hl: truck.spec.length/2, hw: truck.spec.width/2 },
+        { ...o.body, hl: o.spec.length/2, hw: o.spec.width/2 }), 'truck passes without body contact');
+    }
+  }
+  assert(crossed && truck.body.x < cab.body.x - 9 && Math.abs(truck.body.y - end.ey) < 0.7, 'truck clears taxi and returns before junction');
+}
+console.log('Box truck waits for oncoming traffic, clears an angled taxi and merges back');

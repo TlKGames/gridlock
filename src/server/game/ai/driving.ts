@@ -257,6 +257,30 @@ function laneClear(w: World, v: Vehicle): boolean {
   return ok && !w.statics.raycast(b.x, b.y, lx, ly, 1);
 }
 
+/** Is there a gap long enough to borrow the opposing lane and merge back in?
+ * Work in road coordinates: a truck can be angled across the line during the pass. */
+function opposingLaneClear(w: World, v: Vehicle, obstacle: Vehicle, ax: number, ay: number,
+  lane: { x: number; y: number }, ahead: number, reach: number): boolean {
+  const end = Math.max(0, ahead + reach) + v.spec.length + 3;
+  const seconds = 2 + end / 3;
+  for (const other of w.vehicles.values()) {
+    if (other === v || other === obstacle || !occupiesRoad(other)) continue;
+    const { x, y, angle, vx, vy } = other.body;
+    const along = (x - v.body.x) * ax + (y - v.body.y) * ay;
+    const across = (x - lane.x) * ay - (y - lane.y) * ax;
+    const c = Math.cos(angle) * ax + Math.sin(angle) * ay;
+    const s = Math.sin(angle) * ax - Math.cos(angle) * ay;
+    const hl = (Math.abs(c) * other.spec.length + Math.abs(s) * other.spec.width) / 2;
+    const hw = (Math.abs(s) * other.spec.length + Math.abs(c) * other.spec.width) / 2;
+    if (across + hw < LANE_W / 2 || across - hw > 1.5 * LANE_W) continue;
+    const future = along + (vx * ax + vy * ay) * seconds;
+    if (Math.max(along, future) + hl > -v.spec.length / 2 - 1 && Math.min(along, future) - hl < end) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** Steers toward a ground point (world/levels.ts: measured over the map). */
 function steerTo(v: Vehicle, tx: number, ty: number, speed: number): void {
   const b = v.body;
@@ -404,31 +428,56 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
   const aim = laneAim(P, d, look);
   const path = pt.stop !== undefined && Math.hypot(pt.x - P.x, pt.y - P.y) > look ? [aim, ...d.pts] : d.pts;
   let clear = clearance(w, v, panic, true, d.bypassT > 0 ? undefined : path, d.bypassT > 0 ? d.passing : 0);
-  // A nose sticking out of curb parking can block the normal lane centre while
-  // leaving room to pass inside our own lane. Track the offset until our rear clears.
+  // Prefer a small within-lane adjustment. On a two-way street, a wider vehicle
+  // can borrow the opposing lane if it can clear the obstruction and merge before the junction.
   const curbPass = w.vehicles.get(d.curbBlocker ?? clear.blocker);
-  if (curbPass && pt.stop !== undefined && !v.parkingTarget && !curbPass.seats[0] &&
+  if (curbPass && pt.stop !== undefined && !v.parkingTarget &&
       Math.hypot(curbPass.body.vx, curbPass.body.vy) < 0.5) {
     const horizontal = pt.axis === 'h';
     const dir = Math.sign(horizontal ? Math.cos(b.angle) : Math.sin(b.angle));
     const right = dir * (horizontal ? curbPass.body.y - pt.y : pt.x - curbPass.body.x);
     const ahead = dir * (horizontal ? curbPass.body.x - P.x : curbPass.body.y - P.y);
     const reach = (curbPass.spec.length + v.spec.length) / 2 + 1;
-    const offset = (LANE_W - v.spec.width) / 2 - 0.12;
-    if (right > 0 && offset > 0 && ahead > -reach && ahead < 18 &&
-        Math.hypot(pt.x - P.x, pt.y - P.y) > ahead + reach) {
-      const ax = horizontal ? dir : 0, ay = horizontal ? 0 : dir;
+    const ax = horizontal ? dir : 0, ay = horizontal ? 0 : dir;
+    const angle = curbPass.body.angle - Math.atan2(ay, ax);
+    const width = Math.abs(Math.sin(angle)) * curbPass.spec.length + Math.abs(Math.cos(angle)) * curbPass.spec.width;
+    const ownLane = (LANE_W - v.spec.width) / 2 - 0.12;
+    const needed = (v.spec.width + width) / 2 + 0.65 - right;
+    const borrowing = needed > ownLane && pt.lanes === 1;
+    const offset = borrowing ? Math.min(LANE_W, Math.max(LANE_W * 0.65, needed)) : ownLane;
+    const curbObstruction = !curbPass.seats[0] || (right > LANE_W * 0.35 && Math.abs(Math.sin(angle)) > 0.15);
+    const room = Math.hypot(pt.x - P.x, pt.y - P.y) - ahead - reach;
+    const gap = !borrowing || opposingLaneClear(w, v, curbPass, ax, ay, pt, ahead, reach);
+    if (curbObstruction && right >= 0 && needed < LANE_W && offset > 0 && ahead > -reach && ahead < 18 &&
+        room > (borrowing ? v.spec.length / 2 + 2 : 0) && (gap || d.curbBlocker === curbPass.id)) {
       const shifted = { x: aim.x + ay * offset, y: aim.y - ax * offset };
       const beyond = { x: shifted.x + ax * (look + reach), y: shifted.y + ay * (look + reach) };
       const alternate = clearance(w, v, panic, true, [shifted, beyond]);
       if (alternate.cap > clear.cap || (d.curbBlocker === curbPass.id && alternate.cap > 0.3)) {
         d.curbBlocker = curbPass.id;
+        if (borrowing) d.borrowedLane = true;
         aim.x = shifted.x; aim.y = shifted.y;
         clear = alternate;
-        target = Math.min(target, 4);
+        target = Math.min(target, gap ? 4 : 0);
       } else delete d.curbBlocker;
     } else delete d.curbBlocker;
   } else delete d.curbBlocker;
+  // Finish the merge at passing speed, even if the next waypoint starts a turn.
+  if (d.borrowedLane && !d.curbBlocker) {
+    if (pt.stop === undefined) delete d.borrowedLane;
+    else {
+      const horizontal = pt.axis === 'h';
+      const across = horizontal ? pt.y - P.y : pt.x - P.x;
+      if (Math.abs(across) < 0.25) delete d.borrowedLane;
+      else {
+        const dir = Math.sign(horizontal ? Math.cos(b.angle) : Math.sin(b.angle));
+        aim.x = horizontal ? P.x + dir * 4 : pt.x;
+        aim.y = horizontal ? pt.y : P.y + dir * 4;
+        clear = clearance(w, v, panic, true, [aim, ...d.pts]);
+        target = Math.min(target, 4);
+      }
+    }
+  }
   // A siren coming: ease over to the kerb at a crawl, stop there, and stay put until it's been gone
   // a few seconds. Fleeing drivers and other emergency vehicles don't.
   if (!panic && !v.spec.siren && sirenApproaching(w, v)) d.yieldT = 3;
@@ -484,7 +533,7 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
     ty = pt.y + ay * (along + 6) + ax * PULL_OVER;
   }
   if (v.parkingTarget?.lot !== goal?.lot || panic) delete v.parkingTarget;
-  if (goal && !held && pt.axis && Math.hypot(P.x - goal.pullOver.x, P.y - goal.pullOver.y) < 55) {
+  if (goal && !held && !d.borrowedLane && pt.axis && Math.hypot(P.x - goal.pullOver.x, P.y - goal.pullOver.y) < 55) {
     const spot = v.parkingTarget = chooseCurb(w, v, goal);
     if (spot) {
       tx = spot.x; ty = spot.y;
