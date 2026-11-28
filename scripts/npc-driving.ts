@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { obbVsObb } from '../src/shared/sim/dynamic';
 import { pedIndex, vehicleIndex, weaponIndex } from '../src/shared/packs';
 import { stepVehicle } from '../src/shared/sim/physics';
 import { cruise, newDrive } from '../src/server/game/ai/driving';
-import { mayEnter, commitJunction } from '../src/server/game/ai/junctions';
+import { mayEnter, commitJunction, nextJunction } from '../src/server/game/ai/junctions';
 import { laneOf } from '../src/server/game/ai/route';
 import { giveWeapon, removeVehicle, seatPed, spawnPed, spawnVehicle } from '../src/server/game/factory';
 import { tryFire } from '../src/server/game/combat/fire';
@@ -130,3 +131,45 @@ assert(target.car.hp < target.car.spec.hp && target.ped.ai!.panicT > 0, 'a direc
 cruise(w, target.car, target.ped, 1/30, true);
 assert(target.car.ctl.throttle > 0 && !target.car.ctl.handbrake, 'the driver accelerates with a clear escape lane');
 console.log('Blocked exits, restored traffic, four-way queues and driver gunfire reactions passed');
+
+// A crooked parked car narrows a one-lane approach. A queue can pass inside
+// its lane, and the parked car stays where the owner left it.
+w.vehicles.clear(); w.peds.clear();
+const narrow = w.city.segs.find(s => s.parking && s.axis === 'h' && s.x1 - s.x0 > 110)!;
+const travel = laneOf(w, narrow, 1, 0);
+const nose = spawnVehicle(w, vehicleIndex('sedan'), travel.sx + 45, travel.sy + 2.2, -0.33);
+const line = [28, 18, 8].map(offset => driver(travel.sx + offset, travel.sy, 0));
+for (let tick = 0; tick < 900 && line.some(q => q.car.body.x < nose.body.x + 6); tick++) {
+  w.time += 1/30; w.rebuildHashes();
+  for (const q of line) {
+    cruise(w, q.car, q.ped, 1/30);
+    stepVehicle(q.car.body, q.car.spec, q.car.ctl, 1/30, w.statics, true);
+    assert(!obbVsObb({ ...nose.body, hl: nose.spec.length/2, hw: nose.spec.width/2 },
+      { ...q.car.body, hl: q.car.spec.length/2, hw: q.car.spec.width/2 }), 'pass the protruding car without contact');
+  }
+}
+assert(line.every(q => q.car.body.x > nose.body.x + 5), 'the whole queue advances past the crooked car');
+
+// Leave a stationary car in the selected exit for the entire test. The lead
+// driver must pick a free, legal exit without waiting for that car to disappear.
+w.vehicles.clear(); w.peds.clear();
+const ingress = w.city.segs[four.segs.find(id => w.city.segs[id].lanes === 1)!];
+const approach = laneOf(w, ingress, ingress.b === four.id ? 1 : -1, 0);
+const front = driver(approach.ex - approach.hx * 4, approach.ey - approach.hy * 4, Math.atan2(approach.hy, approach.hx));
+w.rebuildHashes();
+cruise(w, front.car, front.ped, 1/30);
+const exitPoint = nextJunction(w, front.ped.ai!.drive!)!.exit!;
+const outgoing = w.map.nearestSegment(exitPoint.x, exitPoint.y).seg;
+const heading = laneOf(w, outgoing, outgoing.a === four.id ? 1 : -1, 0);
+spawnVehicle(w, front.car.type, exitPoint.x + heading.hx * 2, exitPoint.y + heading.hy * 2, Math.atan2(heading.hy, heading.hx));
+let entered = false, cleared = false;
+for (let i = 0; i < 30 * 50 && !cleared; i++) {
+  w.time += 1/30; w.rebuildHashes();
+  cruise(w, front.car, front.ped, 1/30);
+  stepVehicle(front.car.body, front.car.spec, front.car.ctl, 1/30, w.statics, true);
+  const inside = Math.abs(front.car.body.x - four.x) < four.wv/2 && Math.abs(front.car.body.y - four.y) < four.wh/2;
+  entered ||= inside;
+  cleared = entered && !inside;
+}
+assert(cleared, 'a permanently blocked exit does not strand traffic when a legal alternate is open');
+console.log('Curbside queue and blocked-exit recovery passed');

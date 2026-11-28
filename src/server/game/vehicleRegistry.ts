@@ -30,6 +30,7 @@ export class VehicleRegistry {
   private households: number[] = [];
   private districts = new Map<number, number[]>();
   private dealerLots: Rect[] = [];
+  private parkingIndices?: Map<string, number>;
   private slots = new Map<string, Registration>();
 
   constructor(private w: World) {}
@@ -45,6 +46,11 @@ export class VehicleRegistry {
       ids.push(h.id);
     }
     this.dealerLots = city.services.filter(p => SERVICES[p.spec].verb === 'dealer').map(p => city.lots[p.lot].rect);
+  }
+  liveVehicle(vin: string) { return this.live.get(vin); }
+  parkingIndex(x: number, y: number): number | undefined {
+    this.parkingIndices ??= new Map(this.w.city.parking.map((spot, i) => [spot.x + ',' + spot.y, i]));
+    return this.parkingIndices.get(x + ',' + y);
   }
   atSlot(slot: string) { return this.slots.get(slot); }
   leaveSlot(v: Vehicle): void {
@@ -92,6 +98,15 @@ export class VehicleRegistry {
   exit(p: Ped, v: Vehicle): void {
     const r = this.get(v);
     if (!r || p.seat !== 0) return;
+    const spot = v.parkingTarget;
+    if (spot && Math.hypot(v.body.x - spot.x, v.body.y - spot.y) < 1.2) {
+      const i = this.parkingIndex(spot.x, spot.y);
+      if (i !== undefined && !this.atSlot('parking:' + i)) {
+        r.slot = 'parking:' + i;
+        this.slots.set(r.slot, r);
+        v.spot = i;
+      }
+    }
     if (r.holder === r.owner) r.parked = { x: v.body.x, y: v.body.y };
     r.holder = undefined;
   }

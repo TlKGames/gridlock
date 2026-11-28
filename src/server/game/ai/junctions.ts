@@ -90,7 +90,7 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
   return ok;
 }
 
-function exitClear(w: World, v: Vehicle, node: RoadNode, exit: { x: number; y: number }): boolean {
+export function exitClear(w: World, v: Vehicle, node: RoadNode, exit: { x: number; y: number }): boolean {
   let ok = true;
   // Keep the box clear: only go if the lane we're heading into isn't backed up to the junction.
   // Lane starts lie one metre beyond the junction edge. Reserve enough space for

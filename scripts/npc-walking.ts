@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { pedIndex, RULES } from '../src/shared/packs';
+import { obbVsCircle } from '../src/shared/world/shapes';
+import { pedIndex, RULES, vehicleIndex } from '../src/shared/packs';
 import { PED_RADIUS } from '../src/shared/sim/physics';
 import { World } from '../src/server/game/world';
-import { spawnPed } from '../src/server/game/factory';
+import { spawnPed, spawnVehicle } from '../src/server/game/factory';
 import { doorOf } from '../src/server/game/ai/doors';
 import { moveToward, setTask } from '../src/server/game/ai/tasks';
 import { stepPedBody } from '../src/server/game/systems/movement';
@@ -66,3 +67,18 @@ for (let i = 0; i < 300; i++) {
 assert(Math.hypot(a.body.x - inGoal.x, a.body.y - inGoal.y) < 0.3 &&
   Math.hypot(b.body.x - outGoal.x, b.body.y - outGoal.y) < 0.3, 'opposing walkers clear the same doorway');
 console.log('Building detour, sidewalk and doorway passing, and overlap recovery passed');
+
+// A car protruding onto the sidewalk changes the walking route before contact.
+w.peds.clear();
+const van = spawnVehicle(w, vehicleIndex('van'), x, sidewalkY - 0.6, 0.12);
+const walker = spawnPed(w, pedIndex('tourist'), x - 7, sidewalkY);
+setTask(walker, 'wander');
+for (let i = 0; i < 420 && walker.body.x < x + 6; i++) {
+  w.time += dt; w.rebuildHashes();
+  moveToward(w, walker, x + 7, sidewalkY, 2, dt);
+  stepPedBody(w, walker, dt, walker.spec.runSpeed);
+  assert(!obbVsCircle(van.body.x, van.body.y, Math.cos(van.body.angle), Math.sin(van.body.angle),
+    van.spec.length / 2, van.spec.width / 2, { ...walker.body, r: PED_RADIUS }));
+  assert(!w.map.onRoad(walker.body.x, walker.body.y));
+}
+assert(walker.body.x > x + 5, 'pedestrian walks around the van on the sidewalk');

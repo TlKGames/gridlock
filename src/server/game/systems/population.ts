@@ -1,6 +1,7 @@
 // Keeps the streets alive around players: ambient peds, traffic, parked cars, and
 // the fixed vehicles/guards at services. Despawns what nobody can see.
 import { Rng } from '../../../shared/rng';
+import { parkingFits } from '../ai/parking';
 import { dist2 } from '../../../shared/math';
 import { flies } from '../../../shared/sim/kinds';
 import { type PedArchetype, PEDS, ROLE_CREWS, RULES, SERVICES, VEHICLES, ZONES, pedIndex, pedWith, vehicleIndex } from '../../../shared/packs';
@@ -255,7 +256,10 @@ export class Population {
       const slot = 'parking:' + si;
       const saved = w.registry.atSlot(slot);
       if (saved) {
-        const v = w.registry.show(saved);
+        const spec = VEHICLES[vehicleIndex(saved.model)];
+        const live = w.registry.liveVehicle(saved.vin);
+        if (!live && !parkingFits(w, spec, { ...saved.at, angle: saved.angle })) continue;
+        const v = live ?? w.registry.show(saved);
         v.spot = si;
         this.spotState.set(si, v.id);
         continue;
@@ -271,6 +275,7 @@ export class Population {
       const parkingRoll = new Rng(w.seed ^ Math.imul(si + 1, 0x85ebca6b));
       if (!parkingRoll.chance(chance) || w.vehicles.size > RULES.vehicleCap) { this.spotState.set(si, 0); continue; }
       const type = vehicleIndex(w.rng.weighted(z.parked).id);
+      if (!parkingFits(w, VEHICLES[type], s)) continue;
       const gang = turfGang(w.map.districtAt(s.x, s.y));
       const tint = gang && VEHICLES[type].roles.includes('gang') ? gangCarColor(gang) ?? -1 : -1;
       const v = spawnVehicle(w, type, s.x, s.y, s.angle, tint, { slot });

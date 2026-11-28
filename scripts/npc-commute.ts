@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { parkingFits, chooseCurb } from '../src/server/game/ai/parking';
 import { RULES, VEHICLES, pedWith } from '../src/shared/packs';
 import { World } from '../src/server/game/world';
 import { spawnPed, removePed, spawnVehicle, seatPed } from '../src/server/game/factory';
@@ -51,8 +52,9 @@ assert.equal(p.arrivedAt, home.lot, 'walks home after overnight shift');
 
 
 // Approach on the destination side from cruising speed, stop and finish the trip on foot.
-const horizontal = goal.street.axis === 'h';
-const direction = horizontal ? Math.sign(goal.curb.y - goal.street.y0) : -Math.sign(goal.curb.x - goal.street.x0);
+const parkingStreet = goal.parkingStreet!;
+const horizontal = parkingStreet.axis === 'h';
+const direction = horizontal ? Math.sign(goal.pullOver.y - parkingStreet.y0) : -Math.sign(goal.pullOver.x - parkingStreet.x0);
 const angle = horizontal ? (direction > 0 ? 0 : Math.PI) : direction * Math.PI / 2;
 const vType = VEHICLES.findIndex(v => v.seats > 0 && v.maxSpeed > 10 && !v.siren && v.roles.includes('traffic'));
 assert(vType >= 0);
@@ -69,3 +71,19 @@ assert(vType >= 0);
 }
 
 console.log('Multi-street overnight round trip, checkpoint resumption, and curb-to-door arrival passed.');
+
+{
+  const street = w.city.segs.find(s => s.parking && s.axis === 'h' && s.x1 - s.x0 > 90)!;
+  const angle = 0;
+  const car = spawnVehicle(w, vType, street.x0 + 30, street.y0 + 1.8, angle);
+  const curbGoal = { ...goal, pullOver: { x: car.body.x + 20, y: car.body.y } };
+  const preferred = chooseCurb(w, car, curbGoal)!;
+  assert(preferred, 'a driver can approach the nearest open bay');
+  spawnVehicle(w, vType, preferred.x, preferred.y, preferred.angle);
+  assert(!parkingFits(w, car.spec, preferred, car), 'a just-spawned car occupies its full space before the next hash rebuild');
+  const alternate = chooseCurb(w, car, curbGoal)!;
+  assert(alternate && Math.hypot(alternate.x - preferred.x, alternate.y - preferred.y) > car.spec.length);
+  car.parkingTarget = alternate;
+  const queued = spawnVehicle(w, vType, car.body.x - Math.cos(angle) * 7, car.body.y - Math.sin(angle) * 7, angle);
+  assert(!parkingFits(w, queued.spec, alternate, queued), 'a second driver cannot take a claimed bay');
+}

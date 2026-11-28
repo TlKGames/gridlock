@@ -9,6 +9,9 @@ export type TaskName = 'wander' | 'stand' | 'flee' | 'attack' | 'arrest' | 'driv
   | 'revive' | 'extinguish' | 'return' | 'cower' | 'guard' | 'surrender' | 'chat' | 'none';
 
 export interface DriveState {
+  merging?: boolean;
+  curbBlocker?: number;
+  junctionWait?: number;
   pts: { x: number; y: number; stop?: number; lanes?: number; axis?: 'h' | 'v' }[];
   seg: number; dir: 1 | -1; lane: number;
   route: number[];          // node ids remaining (route mode)
@@ -83,6 +86,7 @@ export interface Ped {
 export interface Vehicle {
   vin: string;
   authorizedDriver?: number;
+  parkingTarget?: { x: number; y: number; angle: number; lot: number };
   id: number;
   kind: 'veh';
   type: number;

@@ -87,8 +87,10 @@ export function unseatPed(w: World, p: Ped, place = true): void {
   const v = w.vehicles.get(p.vehicle);
   if (v) {
     w.registry.exit(p, v);
+    const curbExit = p.seat === 0 && !!v.parkingTarget;
+    if (p.seat === 0) delete v.parkingTarget;
     if (v.seats[p.seat] === p.id) v.seats[p.seat] = 0;
-    if (place) placeBeside(w, p, v, p.seat % 2 === 0 ? -1 : 1);
+    if (place) placeBeside(w, p, v, p.seat % 2 === 0 && !curbExit ? -1 : 1);
   }
   p.vehicle = 0;
   p.seat = -1;

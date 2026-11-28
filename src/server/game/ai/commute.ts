@@ -9,11 +9,12 @@ import type { World } from '../world';
 import { doorOf, roomAt } from './doors';
 import { findRoute, segBetween } from './route';
 import { safeToCross } from './pedCrossings';
+import { openFootWaypoint } from './footNavigation';
 import { moveToward } from './tasks';
 
 type Point = { x: number; y: number };
 type Waypoint = Point & { cross?: boolean };
-export interface Destination { lot: number; entrance: Point; curb: Point; pullOver: Point; street: Segment; indoors: boolean }
+export interface Destination { lot: number; entrance: Point; curb: Point; pullOver: Point; parkingStreet?: Segment; street: Segment; indoors: boolean }
 const routes = new WeakMap<Ped, { goal: Destination; steps: Waypoint[]; crossing: boolean }>();
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -38,10 +39,14 @@ export function destination(w: World, lotId: number): Destination {
   }
   const { seg, t } = w.map.nearestSegment(approach.x, approach.y);
   const curb = sidewalk(seg, t, approach);
-  const pullOver = { ...curb };
-  if (seg.axis === 'h') pullOver.y -= Math.sign(curb.y - seg.y0) * 2.6;
-  else pullOver.x -= Math.sign(curb.x - seg.x0) * 2.6;
-  return { lot: lotId, entrance, curb, pullOver, street: seg, indoors: !!interior };
+  let closest = Infinity, pullOver = curb;
+  for (const spot of w.city.parking) {
+    if (spot.lot !== undefined) continue;
+    const d = distance(spot, curb);
+    if (d < closest) { closest = d; pullOver = spot; }
+  }
+  const parkingStreet = closest < Infinity ? w.map.nearestSegment(pullOver.x, pullOver.y).seg : undefined;
+  return { lot: lotId, entrance, curb, pullOver, parkingStreet, street: seg, indoors: !!interior };
 }
 
 /** Pick a repeatable standing place away from the doorway, staff and shop furniture. */
@@ -120,8 +125,10 @@ export function walkCommute(w: World, p: Ped, goal: Destination, dt: number): vo
     route.crossing = true;
   }
   p.ai!.crossing = route.crossing || w.map.onRoad(next.x, next.y) ? 'walking' : 'none';
-  moveToward(w, p, next.x, next.y, p.spec.walkSpeed, dt);
-  if (distance(p.body, next) < 0.9) {
+  const target = distance(p.body, next) < 12 && (route.steps.length > 1 || !goal.indoors)
+    ? openFootWaypoint(w, next, p.body) : next;
+  moveToward(w, p, target.x, target.y, p.spec.walkSpeed, dt);
+  if (distance(p.body, target) < 0.9) {
     route.steps.shift();
     route.crossing = false;
     if (!route.steps.length) {

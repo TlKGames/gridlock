@@ -98,7 +98,8 @@ function vehicleTask(w: World, p: Ped, dt: number): void {
       v.siren = false;
       if (flies(v.spec)) { v.ctl.down = true; v.ctl.throttle = 0; v.ctl.steer = 0; break; }
       const goal = ai.panicT > 0 ? undefined : p.commute;
-      if (goal && Math.hypot(v.body.x - goal.pullOver.x, v.body.y - goal.pullOver.y) < 3 &&
+      const spot = v.parkingTarget;
+      if (goal && spot && spot.lot === goal.lot && Math.hypot(v.body.x - spot.x, v.body.y - spot.y) < 1.2 &&
           Math.hypot(v.body.vx, v.body.vy) < 1.2) {
         v.ctl.throttle = 0; v.ctl.handbrake = true;
         unseatPed(w, p, true);
@@ -145,9 +146,10 @@ function pursue(w: World, p: Ped, v: Vehicle, dt: number): void {
   const d = driveTo(w, v, p, goal.x, goal.y, dt, { stopAt: goal.indoors ? 2 : lethal ? 4 : 8, frontage: goal.frontage, ram: lethal && !!tv });
   if (v.spec.weapons?.length) { gunner(w, p, v, pos, lethal); if (d > 12) return; }
   const tSlow = tv ? Math.hypot(tv.body.vx, tv.body.vy) < 2 : true;
-  const mySlow = Math.abs(forwardSpeed(v.body)) < 3;
+  const mySlow = Math.hypot(v.body.vx, v.body.vy) < (goal.indoors ? 1 : 3);
   const reach = goal.indoors ? 8 : tv ? 14 : lethal ? 20 : 12;
   if (d < reach && tSlow && mySlow && !v.spec.weapons?.length) {
+    v.ctl.throttle = 0; v.ctl.handbrake = true;
     crewExit(w, v, (c) => setTask(c, lethal || c.spec.behaviour === 'military' ? 'attack' : 'arrest', t!.id));
   }
 }

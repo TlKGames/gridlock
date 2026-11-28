@@ -1,7 +1,8 @@
 // Local foot navigation. Door and lift routing supply the destination. Only search
 // for a detour when the next few steps would hit something.
+import { obbVsCircle } from '../../../shared/world/shapes';
 import { PED_RADIUS } from '../../../shared/sim/physics';
-import type { Ped } from '../entities';
+import type { Ped, Vehicle } from '../entities';
 import type { World } from '../world';
 
 type Point = { x: number; y: number };
@@ -18,15 +19,48 @@ export function resetFootRoute(p: Ped): void {
   checked.delete(p);
 }
 
+function touchesCar(point: Point, v: Vehicle): boolean {
+  const b = v.body;
+  return !!obbVsCircle(b.x, b.y, Math.cos(b.angle), Math.sin(b.angle), v.spec.length / 2, v.spec.width / 2,
+    { ...point, r: PED_RADIUS + 0.08 });
+}
+
+// A parked car can cover a pavement waypoint itself. Move that waypoint to a
+// reachable edge so the walker can finish this leg and advance to the next.
+export function openFootWaypoint(w: World, goal: Point, from: Point): Point {
+  let obstacle: Vehicle | undefined;
+  w.vehiclesNear(goal.x, goal.y, 12, v => {
+    if (v.body.alt < 2 && Math.hypot(v.body.vx, v.body.vy) < 0.5 && touchesCar(goal, v)) obstacle = v;
+  });
+  if (!obstacle) return goal;
+  const { body, spec } = obstacle, c = Math.cos(body.angle), s = Math.sin(body.angle);
+  let best = Infinity, result = goal;
+  for (const [along, across] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+    const f = along * (spec.length / 2 + PED_RADIUS + 0.35), r = across * (spec.width / 2 + PED_RADIUS + 0.35);
+    const at = { x: body.x + c * f - s * r, y: body.y + s * f + c * r };
+    if (w.map.isWater(at.x, at.y) || (!w.map.onRoad(goal.x, goal.y) && w.map.onRoad(at.x, at.y)) ||
+        w.statics.resolveCircle({ ...at }, PED_RADIUS)) continue;
+    let blocked = false;
+    w.vehiclesNear(at.x, at.y, 12, v => { if (v.body.alt < 2 && touchesCar(at, v)) blocked = true; });
+    const cost = Math.hypot(at.x - goal.x, at.y - goal.y) + Math.hypot(at.x - from.x, at.y - from.y);
+    if (!blocked && cost < best) { best = cost; result = at; }
+  }
+  return result;
+}
+
 function clear(w: World, a: Point, b: Point, sidewalk: boolean, limit = Infinity): boolean {
   const dx = b.x - a.x, dy = b.y - a.y, distance = Math.hypot(dx, dy);
   if (!distance) return true;
   const length = Math.min(limit, distance);
+  const cars: Vehicle[] = [];
+  w.vehiclesNear(a.x + dx / distance * length / 2, a.y + dy / distance * length / 2, length / 2 + 12, v => {
+    if (v.body.alt < 2 && v.spec.movement !== 'boat') cars.push(v);
+  });
   const count = Math.ceil(length / PED_RADIUS);
   for (let i = 1; i <= count; i++) {
     const t = length / distance * i / count;
     const point = { x: a.x + dx * t, y: a.y + dy * t };
-    if (w.map.isWater(point.x, point.y) || (sidewalk && w.map.onRoad(point.x, point.y)) ||
+    if (cars.some(v => touchesCar(point, v)) || w.map.isWater(point.x, point.y) || (sidewalk && w.map.onRoad(point.x, point.y)) ||
         w.statics.resolveCircle(point, PED_RADIUS)) return false;
   }
   return true;

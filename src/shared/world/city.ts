@@ -19,7 +19,7 @@ import type { Way } from './wayTypes';
 
 const HALF_PI = Math.PI / 2;
 
-function curbSpots(segs: Segment[], nodes: RoadNode[]): ParkSpot[] {
+export function curbSpots(segs: Segment[], nodes: RoadNode[]): ParkSpot[] {
   const out: ParkSpot[] = [];
   for (const s of segs) {
     if (!s.parking) continue;
