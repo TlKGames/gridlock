@@ -54,7 +54,11 @@ function fleeNoise(w: World, p: Ped, x: number, y: number, lethal: boolean): voi
   if (ai.task === 'flee' || ai.task === 'attack' || ai.task === 'cower' || ai.task === 'surrender') return;
   // Drivers only spook at danger close by: a few seconds of fleeing, then back to normal.
   if (p.vehicle) {
-    if (p.seat === 0 && lethal && Math.hypot(p.body.x - x, p.body.y - y) < 25) ai.panicT = Math.max(ai.panicT, 6);
+    const gunfire = !lethal && p.spec.behaviour === 'civilian';
+    const distance = Math.hypot(p.body.x - x, p.body.y - y);
+    if (p.seat === 0 && ((lethal && distance < 25) || (gunfire && distance < 15))) {
+      ai.panicT = Math.max(ai.panicT, lethal ? 6 : 3);
+    }
     return;
   }
   if (w.rng.chance(lethal ? 0.85 : 0.6)) setTask(p, w.rng.chance(0.2) ? 'cower' : 'flee', 0, x, y);

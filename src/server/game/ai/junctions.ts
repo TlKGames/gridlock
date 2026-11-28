@@ -1,6 +1,8 @@
 // Junction right-of-way for AI traffic: don't enter a box that crossing traffic is using, yield to
 // whoever reaches an unsignalled junction first, and don't enter unless there's room on the far side.
 import { flies, floats } from '../../../shared/sim/kinds';
+import { trailerCentre } from '../../../shared/sim/physics';
+import { obbVsAabb } from '../../../shared/world/shapes';
 import type { RoadNode } from '../../../shared/world/cityTypes';
 import type { DriveState, Vehicle } from '../entities';
 import type { World } from '../world';
@@ -42,8 +44,27 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
   });
   if (!ok || !exit) return ok;
   // Keep the box clear: only go if the lane we're heading into isn't backed up to the junction.
-  w.vehiclesNear(exit.x, exit.y, 7, (o) => {
-    if (o !== v && occupiesRoad(o) && Math.hypot(o.body.vx, o.body.vy) < 1) ok = false;
+  // Lane starts lie one metre beyond the junction edge. Reserve enough space for
+  // our whole vehicle (including a trailer) and a small stopping gap in that lane.
+  const horizontal = Math.abs(exit.x - node.x) > node.wv / 2;
+  const dir = horizontal ? Math.sign(exit.x - node.x) : Math.sign(exit.y - node.y);
+  const length = v.spec.length + (v.spec.trailer?.length ?? 0) + 2;
+  const halfWidth = Math.max(v.spec.width, v.spec.trailer?.width ?? 0) / 2 + 0.25;
+  const cx = exit.x + (horizontal ? dir * length / 2 : 0);
+  const cy = exit.y + (horizontal ? 0 : dir * length / 2);
+  const hw = horizontal ? length / 2 : halfWidth, hh = horizontal ? halfWidth : length / 2;
+  const space = { x0: cx - hw, x1: cx + hw, y0: cy - hh, y1: cy + hh, h: 0 };
+  const overlaps = (x: number, y: number, angle: number, l: number, width: number) =>
+    obbVsAabb(x, y, Math.cos(angle), Math.sin(angle), l / 2, width / 2, space);
+  // Include tractor centres beyond the reserved space whose trailers can still overlap it.
+  w.vehiclesNear(cx, cy, length / 2 + 20, (o) => {
+    if (!ok || o === v || !occupiesRoad(o) || Math.hypot(o.body.vx, o.body.vy) >= 1) return;
+    if (overlaps(o.body.x, o.body.y, o.body.angle, o.spec.length, o.spec.width)) { ok = false; return; }
+    const trailer = o.spec.trailer;
+    if (trailer) {
+      const pos = trailerCentre(o.body, o.spec, o.trailer);
+      if (overlaps(pos.x, pos.y, o.trailer, trailer.length, trailer.width)) ok = false;
+    }
   });
   return ok;
 }

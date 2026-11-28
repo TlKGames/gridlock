@@ -184,7 +184,7 @@ export function arrest(w: World, p: Ped, dt: number): boolean {
   p.trigger = false;
   if (d > 100) return true;
   const reach = t.vehicle ? (w.vehicles.get(t.vehicle)?.spec.width ?? 2) / 2 + 1.6 : 1.5;
-  if (d > reach || !sameFloor) { moveToward(w, p, pos.x, pos.y, p.spec.runSpeed, dt); return false; }
+  if (d > reach || !sameFloor || w.statics.raycast(p.body.x, p.body.y, pos.x, pos.y, 1.2)) { moveToward(w, p, pos.x, pos.y, p.spec.runSpeed, dt); return false; }
   stop(p);
   p.aim = Math.atan2(pos.y - p.body.y, pos.x - p.body.x);
   const tv = t.vehicle ? w.vehicles.get(t.vehicle) : undefined;
@@ -197,8 +197,13 @@ export function revive(w: World, p: Ped, dt: number): boolean {
   const ai = p.ai!;
   const body = w.peds.get(ai.target);
   if (!body || !body.dead || body.player) return true;
-  const d = moveToward(w, p, body.body.x, body.body.y, p.spec.runSpeed, dt);
-  if (d > 1.3) return false;
+  const { x, y } = body.body;
+  const { d, sameFloor } = reachDist(p.body.x, p.body.y, x, y);
+  if (!sameFloor || d > 1.3 || w.statics.raycast(p.body.x, p.body.y, x, y, 1.2)) {
+    ai.workT = 0;
+    moveToward(w, p, x, y, p.spec.runSpeed, dt);
+    return false;
+  }
   stop(p);
   ai.workT += dt;
   if (ai.workT < 3) return false;
