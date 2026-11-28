@@ -20,6 +20,7 @@ export interface Resident {
   id: number;
   household: number;
   identity?: { name: string; gender: 'male' | 'female' };
+  commuteVin?: string;
   occupiedLot?: number;
   walk?: { lot: number; minute: number; speed: number; points: { x: number; y: number; cross?: boolean }[] };
   archetype?: string;
@@ -28,6 +29,7 @@ export interface Resident {
 }
 
 export interface Census {
+  householdParkingSeeded?: boolean;
   addresses: Address[];
   households: Household[];
   residents: Resident[];

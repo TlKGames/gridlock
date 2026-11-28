@@ -87,3 +87,68 @@ console.log('Multi-street overnight round trip, checkpoint resumption, and curb-
   const queued = spawnVehicle(w, vType, car.body.x - Math.cos(angle) * 7, car.body.y - Math.sin(angle) * 7, angle);
   assert(!parkingFits(w, queued.spec, alternate, queued), 'a second driver cannot take a claimed bay');
 }
+
+// Start with the generated household fleet. Follow one VIN through an unseen shift,
+// a save/reload, and a visible departure where the worker must collect it themselves.
+{
+  const { createCensus, scheduledLot } = await import('../src/server/game/census');
+  const { HouseholdParking } = await import('../src/server/game/householdParking');
+  const { buildingAccess } = await import('../src/server/game/ai/commute');
+  const city = new World(RULES.citySeed);
+  const roster = createCensus(city.city, city.seed);
+  city.gameMinutes = 180;
+  city.registry.setCensus(roster);
+  const fleet = new HouseholdParking(city, roster);
+  const drivers = [...fleet.driverByVin.values()];
+  assert(drivers.length > 0);
+  const saved = city.registry.save();
+  assert.equal(new Set(saved.map(v => v.slot)).size, saved.length);
+  for (const person of drivers) {
+    const v = city.registry.find(person.commuteVin!)!;
+    const door = buildingAccess(city, person.occupiedLot!).entrance;
+    assert.equal(v.owner, 'house:' + person.household);
+    assert(Math.hypot(v.at.x - door.x, v.at.y - door.y) <= 75);
+  }
+  const worker = drivers.find(person => {
+    const job = person.job!;
+    return !buildingAccess(city, job.lot).indoors && scheduledLot(roster, person, city.gameMinutes) !== job.lot;
+  })!;
+  const vin = worker.commuteVin!;
+  const original = city.registry.find(vin)!;
+  const oldSlot = original.slot;
+  original.taken = true;
+  assert.equal(fleet.park(original, worker.job!.lot), false);
+  assert.equal(original.slot, oldSlot);
+  original.taken = false;
+  const manager = new ResidentPool(city, roster, fleet);
+  city.gameMinutes = worker.job!.start;
+  manager.update();
+  assert.equal(worker.occupiedLot, worker.job!.lot);
+  assert.notEqual(city.registry.find(vin)!.slot, oldSlot);
+  const reopened = new World(city.seed);
+  reopened.gameMinutes = city.gameMinutes;
+  reopened.registry.load(structuredClone(city.registry.save()));
+  reopened.registry.setCensus(roster);
+  const fleet2 = new HouseholdParking(reopened, roster);
+  assert.equal(reopened.registry.find(vin)!.slot, city.registry.find(vin)!.slot);
+  const manager2 = new ResidentPool(reopened, roster, fleet2);
+  const car = reopened.registry.find(vin)!;
+  const origin = { ...car.at };
+  reopened.gameMinutes = (worker.job!.start + worker.job!.duration) % 1440;
+  // Only this origin is observed, as in a player waiting outside the workplace.
+  reopened.nearestPlayerDist2 = (x, y) => (origin.x - x) ** 2 + (origin.y - y) ** 2;
+  reopened.players.set(1, {} as never);
+  for (let frame = 0; frame < 5400; frame++) {
+    reopened.time += 1 / 30;
+    reopened.gameMinutes = (reopened.gameMinutes + RULES.gameMinutesPerSecond / 30) % 1440;
+    reopened.rebuildHashes();
+    if (frame % 15 === 0) manager2.update();
+    updateAi(reopened, 1 / 30); updateNpcPeds(reopened, 1 / 30); updateVehicles(reopened, 1 / 30);
+    const v = reopened.registry.liveVehicle(vin);
+    if (v?.seats[0] && Math.hypot(v.body.x - origin.x, v.body.y - origin.y) > 8) break;
+  }
+  const departed = reopened.registry.liveVehicle(vin)!;
+  assert.equal(reopened.peds.get(departed?.seats[0])?.resident?.id, worker.id);
+  assert(Math.hypot(departed.body.x - origin.x, departed.body.y - origin.y) > 8);
+  console.log(drivers.length + ' household cars checked. Offscreen shift, VIN reload and visible return departure passed.');
+}

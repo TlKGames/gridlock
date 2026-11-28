@@ -69,6 +69,13 @@ export class VehicleRegistry {
     if (!list) this.byOwner.set(r.owner, list = new Set());
     list.add(r);
   }
+  dealerAt(x: number, y: number) { return this.dealerLots.some(lot => rectContains(lot, x, y)); }
+  parkHousehold(r: Registration, index: number): void {
+    this.releaseSlot(r);
+    const { x, y, angle } = this.w.city.parking[index];
+    Object.assign(r, { at: { x, y }, parked: { x, y }, angle, slot: 'parking:' + index });
+    this.index(r);
+  }
   owned(owner: string) { return this.byOwner.get(owner); }
   get(v: Vehicle) { return this.records.get(v.vin); }
   find(vin: string) { return this.records.get(vin); }
@@ -76,7 +83,7 @@ export class VehicleRegistry {
     if (this.get(v)) return;
     const { x, y, angle } = v.body;
     if (!owner) {
-      if (v.spec.movement !== 'wheels' || !this.households.length || this.dealerLots.some(lot => rectContains(lot, x, y))) return;
+      if (v.spec.movement !== 'wheels' || !this.households.length || this.dealerAt(x, y)) return;
       const pool = this.districts.get(this.w.map.districtAt(x, y)) ?? this.households;
       owner = 'house:' + pool[parseInt(v.vin.slice(0, 8), 16) % pool.length];
     }

@@ -4,7 +4,7 @@ import { Rng } from '../../../shared/rng';
 import { parkingFits } from '../ai/parking';
 import { dist2 } from '../../../shared/math';
 import { flies } from '../../../shared/sim/kinds';
-import { type PedArchetype, PEDS, ROLE_CREWS, RULES, SERVICES, VEHICLES, ZONES, pedIndex, pedWith, vehicleIndex } from '../../../shared/packs';
+import { type PedArchetype, PEDS, ROLE_CREWS, UNIVERSE, RULES, SERVICES, VEHICLES, ZONES, pedIndex, pedWith, vehicleIndex } from '../../../shared/packs';
 import type { Ped } from '../entities';
 import { removePed, removeVehicle, seatPed, spawnPed, spawnVehicle } from '../factory';
 import { setTask } from '../ai/tasks';
@@ -12,6 +12,7 @@ import type { World } from '../world';
 import { gangCarColor, gangMember, pedPool, turfGang } from '../../../shared/world/gangTurf';
 import { laneSpawn, pedSpawn } from './spawnPoints';
 import { groundOf } from '../../../shared/world/levels';
+import { HouseholdParking } from '../householdParking';
 import { ResidentPool } from '../residentPool';
 import type { Census } from '../census';
 import { mooredBoats } from './moorings';
@@ -39,12 +40,14 @@ export class Population {
   private spotBuckets = new Map<number, number[]>();
   private timer = 0;
 
+  private parking?: HouseholdParking;
   private residents?: ResidentPool;
 
   constructor(private w: World, census?: Census) {
     if (census) {
       w.registry.setCensus(census);
-      this.residents = new ResidentPool(w, census);
+      if (UNIVERSE.id === 'bayhaven') this.parking = new HouseholdParking(w, census);
+      this.residents = new ResidentPool(w, census, this.parking);
     }
     w.city.parking.forEach((s, i) => {
       const k = Math.floor(s.y / BUCKET) * 64 + Math.floor(s.x / BUCKET);
@@ -222,7 +225,12 @@ export class Population {
         { owner: resident && 'house:' + resident.household });
       v.body.vx = Math.cos(s.angle) * 8; v.body.vy = Math.sin(s.angle) * 8;
       const d = spawnPed(w, resident?.archetype ? pedIndex(resident.archetype) : driver, s.x, s.y, s.angle);
-      if (resident) this.residents!.bind(resident, d);
+      if (resident) {
+        this.residents!.bind(resident, d);
+        if (this.parking && resident.job && w.registry.get(v)) {
+          this.parking.assignDriver(resident, v.vin);
+        }
+      }
       v.authorizedDriver = d.id;
       seatPed(w, d, v, 0);
       setTask(d, 'drive');
@@ -251,19 +259,21 @@ export class Population {
       }
     }
     for (const si of seen) {
-      if (this.spotState.get(si)) continue;
+
       const s = w.city.parking[si];
       const slot = 'parking:' + si;
       const saved = w.registry.atSlot(slot);
       if (saved) {
         const spec = VEHICLES[vehicleIndex(saved.model)];
         const live = w.registry.liveVehicle(saved.vin);
+        if (!live && w.vehicles.size >= RULES.vehicleCap) continue;
         if (!live && !parkingFits(w, spec, { ...saved.at, angle: saved.angle })) continue;
         const v = live ?? w.registry.show(saved);
         v.spot = si;
         this.spotState.set(si, v.id);
         continue;
       }
+      if (this.parking && !w.registry.dealerAt(s.x, s.y)) continue;
       if (this.spotState.has(si)) continue;
       if (w.nearestPlayerDist2(s.x, s.y) < 70 * 70) continue; // don't pop in view
       let occupied = false;

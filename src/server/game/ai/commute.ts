@@ -18,7 +18,7 @@ export interface Destination { lot: number; entrance: Point; curb: Point; pullOv
 const routes = new WeakMap<Ped, { goal: Destination; steps: Waypoint[]; crossing: boolean }>();
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 
-export function destination(w: World, lotId: number): Destination {
+export function buildingAccess(w: World, lotId: number) {
   const lot = w.city.lots[lotId], rect = lot.building!.rect;
   const interior = w.city.interiors.find(i => i.place.lot === lotId);
   let entrance: Point;
@@ -37,6 +37,11 @@ export function destination(w: World, lotId: number): Destination {
       y: center.y + fy * ((rect.y1 - rect.y0) / 2 + 1) };
     approach = entrance;
   }
+  return { entrance, approach, indoors: !!interior };
+}
+
+export function destination(w: World, lotId: number): Destination {
+  const { entrance, approach, indoors } = buildingAccess(w, lotId);
   const { seg, t } = w.map.nearestSegment(approach.x, approach.y);
   const curb = sidewalk(seg, t, approach);
   let closest = Infinity, pullOver = curb;
@@ -46,7 +51,12 @@ export function destination(w: World, lotId: number): Destination {
     if (d < closest) { closest = d; pullOver = spot; }
   }
   const parkingStreet = closest < Infinity ? w.map.nearestSegment(pullOver.x, pullOver.y).seg : undefined;
-  return { lot: lotId, entrance, curb, pullOver, parkingStreet, street: seg, indoors: !!interior };
+  return { lot: lotId, entrance, curb, pullOver, parkingStreet, street: seg, indoors };
+}
+
+export function pickupDestination(w: World, lot: number, parked: Point): Destination {
+  const { seg, t } = w.map.nearestSegment(parked.x, parked.y);
+  return { lot, entrance: parked, curb: sidewalk(seg, t, parked), street: seg, pullOver: parked, indoors: false };
 }
 
 /** Pick a repeatable standing place away from the doorway, staff and shop furniture. */

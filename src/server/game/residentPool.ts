@@ -1,12 +1,13 @@
 // Home and work indexes cover the whole room; only nearby, currently scheduled residents spawn.
-import { RULES, pedIndex } from '../../shared/packs';
+import { RULES, pedIndex, pedWith } from '../../shared/packs';
 import { removePed, seatPed, spawnPed } from './factory';
 import { setTask } from './ai/tasks';
-import { destination, checkpointWalk, indoorSpot, resumeRoute, walkPosition, type Destination } from './ai/commute';
+import { destination, pickupDestination, checkpointWalk, indoorSpot, resumeRoute, walkPosition, type Destination } from './ai/commute';
 import type { Ped } from './entities';
 import { assignFamilyNames } from './familyNames';
 import type { Census, Resident } from './census';
 import { scheduledLot } from './census';
+import type { HouseholdParking } from './householdParking';
 import type { World } from './world';
 
 const CELL = 120;
@@ -19,7 +20,7 @@ export class ResidentPool {
   private walking = new Set<Resident>();
   private active = new Map<number, number>();
 
-  constructor(private w: World, private census: Census) {
+  constructor(private w: World, private census: Census, private parking?: HouseholdParking) {
     assignFamilyNames(census, w.seed);
     for (const resident of census.residents) {
       if (resident.occupiedLot !== undefined) this.occupants.add(resident);
@@ -54,7 +55,10 @@ export class ResidentPool {
     if (!ped.resident) return;
     if (ped.resident.occupiedLot !== undefined) this.occupants.add(ped.resident);
     delete ped.resident.walk;
-    checkpointWalk(this.w, ped);
+    if (ped.collectingVin && ped.commute) {
+      ped.resident.occupiedLot = ped.commute.lot;
+      this.occupants.add(ped.resident);
+    } else checkpointWalk(this.w, ped);
     if (ped.resident.walk) this.walking.add(ped.resident);
     else this.walking.delete(ped.resident);
   }
@@ -94,19 +98,43 @@ export class ResidentPool {
     return goal;
   }
 
+  private nearLot(lot: number): boolean {
+    const rect = this.w.city.lots[lot].rect;
+    return this.w.nearestPlayerDist2((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2) < (RULES.spawnRadius[1] + 30) ** 2;
+  }
+
+  private nextParkingUpdate = 0;
   update(): void {
+    if (this.parking && this.w.time >= this.nextParkingUpdate) {
+      this.nextParkingUpdate = this.w.time + 3;
+      for (const r of this.parking.driverByVin.values()) {
+        if (r.deceased || r.walk || this.w.peds.has(this.active.get(r.id) ?? 0)) continue;
+        const lot = scheduledLot(this.census, r, this.w.gameMinutes);
+        if (r.occupiedLot === lot) continue;
+        const car = this.w.registry.find(r.commuteVin!);
+        if (r.occupiedLot !== undefined && this.nearLot(r.occupiedLot)) continue;
+        if (car && this.w.nearestPlayerDist2(car.parked.x, car.parked.y) < RULES.spawnRadius[1] ** 2) continue;
+        // The resident can travel without a missing or impounded vehicle.
+        if (!car || car.taken || car.reported || car.stored || this.parking.park(car, lot)) {
+          r.occupiedLot = lot;
+          this.occupants.add(r);
+        }
+      }
+    }
     for (const r of this.occupants) {
       if (this.w.peds.has(this.active.get(r.id) ?? 0)) continue;
       const old = r.occupiedLot;
       if (old === undefined || r.deceased) { this.occupants.delete(r); continue; }
       const due = scheduledLot(this.census, r, this.w.gameMinutes) !== old;
+      if (r.commuteVin && !this.nearLot(old)) continue;
       const goal = this.goal(old);
       const near = this.w.nearestPlayerDist2(goal.entrance.x, goal.entrance.y) < RULES.spawnRadius[1] ** 2;
-      if (!near && due) { delete r.occupiedLot; this.occupants.delete(r); continue; }
+      if (!near && due && !r.commuteVin) { delete r.occupiedLot; this.occupants.delete(r); continue; }
       if (!near || (!due && !goal.indoors)) continue;
       if (this.w.peds.size >= Math.min(RULES.pedCap, this.w.players.size * RULES.pedCapPerPlayer)) continue;
       const at = goal.indoors ? indoorSpot(this.w, goal, r.id) : goal.entrance;
-      const ped = spawnPed(this.w, pedIndex(r.archetype!), at.x, at.y);
+      const arch = r.archetype ? pedIndex(r.archetype) : pedWith('civilian');
+      const ped = spawnPed(this.w, arch, at.x, at.y);
       this.bind(r, ped);
       if (!due) { ped.arrivedAt = old; r.occupiedLot = old; }
       setTask(ped, 'wander');
@@ -152,9 +180,11 @@ export class ResidentPool {
     ped.arrivedAt = undefined;
     if (!ped.vehicle && previous !== undefined && previous !== lot) {
       for (const car of this.w.registry.owned('house:' + resident.household) ?? []) {
-        if (car.reported || (car.holder === car.owner) || Math.hypot(car.parked.x - ped.body.x, car.parked.y - ped.body.y) > 100) continue;
+        const driver = this.parking?.driverByVin.get(car.vin);
+        if ((driver && driver !== resident) || (resident.commuteVin && resident.commuteVin !== car.vin)) continue;
+        if (car.stored || car.reported || (car.holder === car.owner) || Math.hypot(car.parked.x - ped.body.x, car.parked.y - ped.body.y) > 100) continue;
         ped.collectingVin = car.vin;
-        ped.commute = { ...this.goal(previous), indoors: false, entrance: car.parked };
+        ped.commute = pickupDestination(this.w, previous, car.parked);
         break;
       }
     }
