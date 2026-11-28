@@ -17,7 +17,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "voices": "tsx scripts/voices.ts",
     "scripts": "tsx scripts/scripts-md.ts",
-    "hear": "tsx scripts/hear.ts"
+    "hear": "tsx scripts/hear.ts",
+    "census": "node --import tsx scripts/census.ts"
   },
   "dependencies": {
     "@fontsource/bebas-neue": "^5.3.0",

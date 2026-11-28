@@ -52,6 +52,8 @@ try {
   assert.equal(loadRoom('TEST')?.profiles[pl.ownerKey].cash, pl.cash);
   connected = true;
   const reopened = new Room('TEST', RULES.citySeed);
+  assert.deepEqual(reopened.census, room.census, 'legacy room gains a persistent citywide census');
+  assert.deepEqual(loadRoom('TEST')?.census, room.census);
   const namesake = seat(reopened, { ...character, id: 'rook-two' });
   assert.deepEqual(namesake.owned, [], 'a different character with the same name has no claim');
   reopened.leave(namesake);

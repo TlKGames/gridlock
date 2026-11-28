@@ -1,6 +1,7 @@
 // Room save files: property ownership and player profiles survive server restarts. A room belongs
 // to one universe (UNIVERSE.id); saves from another, or from an older save version, aren't loaded.
 // On a hosted server, point GRIDLOCK_DATA at a persistent volume so rooms outlive redeploys.
+import type { Census } from './game/census';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -14,6 +15,7 @@ export const SAVE_VERSION = 4;
 export interface SavedProfile { name?: string; cash: number; bank?: number; garage: number[]; owned: number[]; felonies?: Record<string, number>; deaths: number; respect?: Record<string, number>; met?: string[] }
 
 export interface RoomSave {
+  census?: Census;
   version: typeof SAVE_VERSION;
   universe: string;
   seed: number;

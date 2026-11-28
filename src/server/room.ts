@@ -29,6 +29,7 @@ import { updateMounts } from './game/systems/mounts';
 import { buildSnapshot, playerList } from './game/systems/snapshot';
 import { Population } from './game/systems/population';
 import { updateWanted } from './game/systems/wanted';
+import { createCensus, type Census } from './game/census';
 import { World } from './game/world';
 import type { CharacterSave } from '../shared/packs';
 import { progressOf } from './characters';
@@ -42,6 +43,7 @@ export interface Conn {
 
 export class Room {
   readonly world: World;
+  readonly census: Census;
   private pop: Population;
   private dispatch: Dispatch;
   readonly econ: Economy;
@@ -59,6 +61,7 @@ export class Room {
     const loaded = loadRoom(code);
     const save = loaded && loaded.seed === seed ? loaded : null;
     const w = (this.world = new World(seed));
+    this.census = save?.census ?? createCensus(w.city, seed);
     if (save) w.gameMinutes = save.gameMinutes;
     this.profiles = Object.assign(Object.create(null), save?.profiles);
     this.pop = new Population(w);
@@ -295,7 +298,7 @@ export class Room {
 
   persist(): void {
     for (const pl of this.world.players.values()) this.storeProfile(pl);
-    const save: RoomSave = { version: SAVE_VERSION, universe: UNIVERSE.id, seed: this.world.seed, mode: this.rounds.mode.id, gameMinutes: this.world.gameMinutes, owners: [...this.econ.owners.entries()], safes: [...this.business.safes.entries()], profiles: this.profiles };
+    const save: RoomSave = { census: this.census, version: SAVE_VERSION, universe: UNIVERSE.id, seed: this.world.seed, mode: this.rounds.mode.id, gameMinutes: this.world.gameMinutes, owners: [...this.econ.owners.entries()], safes: [...this.business.safes.entries()], profiles: this.profiles };
     saveRoom(this.code, save);
   }
 
