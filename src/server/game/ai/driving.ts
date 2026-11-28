@@ -1,4 +1,5 @@
 // NPC driving: lane-following traffic with lights, and routed/direct pursuit driving.
+import { leaveParking, recovering, startDetour } from './manoeuvres';
 import { chooseCurb } from './parking';
 import type { Destination } from './commute';
 import { angleDiff, clamp } from '../../../shared/math';
@@ -208,7 +209,7 @@ function clearance(w: World, v: Vehicle, aggressive: boolean, keepGap = false, p
   if (!aggressive) {
     w.pedsNear(b.x + c * 7, b.y + s * 7, 9, (o) => {
       // Only people actually in the road count; corner sidewalks don't stop traffic.
-      if (o.dead || !w.map.onRoad(o.body.x, o.body.y)) return;
+      if (o.vehicle || o.dead || !w.map.onRoad(o.body.x, o.body.y)) return;
       const rx = o.body.x - b.x, ry = o.body.y - b.y;
       const f = rx * c + ry * s, l = -rx * s + ry * c;
       if (f <= 0 || f > hl + 9 || Math.abs(l) > hw + 1) return;
@@ -313,6 +314,10 @@ function unstick(w: World, v: Vehicle, d: DriveState, wanted: number, dt: number
       const along = -(dx * c + dy * s), across = Math.abs(-dx * s + dy * c);
       if (along > 0 && along < rear + o.spec.length / 2 && across < (v.spec.width + o.spec.width) / 2 + 0.6) clear = false;
     });
+    w.pedsNear(v.body.x - rear * c, v.body.y - rear * s, rear + 2, p => {
+      const dx = p.body.x - v.body.x, dy = p.body.y - v.body.y;
+      if (!p.vehicle && !p.dead && dx * c + dy * s < 0 && Math.abs(dx * s - dy * c) < v.spec.width / 2 + 0.7) clear = false;
+    });
     if (!clear) { v.ctl.throttle = 0; v.ctl.handbrake = true; return true; }
     v.ctl.throttle = -0.8;
     // Hold the chosen lock through recovery; flipping it every tick cancels the turn.
@@ -337,8 +342,13 @@ function mustStop(node: RoadNode, axis: 'h' | 'v', t: number, dist: number, vf: 
 /** Ordinary traffic: follow lanes, obey lights, keep distance. */
 export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, goal?: Destination): void {
   const ai = p.ai!;
+  if (v.departureBay !== undefined) {
+    if (leaveParking(w, v, dt)) return;
+    ai.drive = null;
+  }
   if (!ai.drive) ai.drive = newDrive(w, v);
   const d = ai.drive;
+  if (recovering(w, v, d, dt)) return;
   const b = v.body;
   // The lane points are ground coordinates.
   const P = groundOf(b.x, b.y);
@@ -489,6 +499,7 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
   const creeping = !held && !clear.ped && clear.cap < 1 && vf < 1.5 && blocker && canCreep(w, v, blocker);
   if (creeping) clear.cap = 1.2;
   // Overtakes crawl past (bumps under ~4 m/s do no damage).
+  const roadSpeed = target;
   if (d.bypassT > 0) { d.bypassT -= dt; target = Math.min(target, 4, clear.cap); }
   else target = Math.min(target, clear.cap);
   if (pulling) target = Math.min(target, d.pullT < PULL_TIME ? 4 : 0);
@@ -508,6 +519,32 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
     && Math.hypot(first.x - P.x, first.y - P.y) > 22;
   if (blocked) {
     d.blockT += dt;
+    // A car can be nudged diagonally across the parking strip after starting
+    // its normal route. Recover using the nearby parked vehicle's frontage.
+    if (d.blockT > 3 && !v.parkingTarget && !v.spec.trailer && v.spec.movement === 'wheels' &&
+        blocker && !blocker.seats[0] && blocker.spot >= 0 && Math.abs(vf) < 0.6) {
+      const bay = w.city.parking[blocker.spot];
+      if (bay && Math.hypot(b.x - bay.x, b.y - bay.y) < 9 && Math.abs(Math.sin(b.angle - bay.angle)) > 0.16 &&
+          (bay.lot !== undefined || (pt.axis && Math.abs(pt.axis === 'h' ? b.y - pt.y : b.x - pt.x) > 0.9))) {
+        v.departureBay = blocker.spot;
+        return;
+      }
+    }
+    // Two occupied cars wedged at different angles can also negotiate a gap.
+    // Only one starts the manoeuvre, and a driver waiting for priority keeps it.
+    const otherDrive = blocker && w.peds.get(blocker.seats[0])?.ai?.drive;
+    const crossed = blocker && otherDrive && v.id < blocker.id && otherDrive.why === 'car' &&
+      Math.hypot(blocker.body.vx, blocker.body.vy) < 0.5 && Math.abs(Math.sin(b.angle - blocker.body.angle)) > 0.25;
+    if (d.blockT > 4 && blocker && ((!blocker.seats[0] && clear.still) || crossed) && !clear.ped && pt.axis &&
+        !v.parkingTarget && v.spec.movement === 'wheels' && !v.spec.trailer) {
+      const dir = Math.sign(pt.axis === 'h' ? pt.x - P.x : pt.y - P.y);
+      const ax = pt.axis === 'h' ? dir : 0, ay = pt.axis === 'v' ? dir : 0;
+      const ahead = (blocker.body.x - P.x) * ax + (blocker.body.y - P.y) * ay;
+      if (pt.lanes !== 1 || opposingLaneClear(w, v, blocker, ax, ay, pt, ahead, (v.spec.length + blocker.spec.length) / 2)) {
+        startDetour(w, v, d, blocker);
+        d.blockT = 0;
+      }
+    }
     // A stationary obstruction can be passed in a clear adjacent travel lane.
     const wait = clear.still ? 2 : Infinity; // never pass someone waiting in traffic or a pedestrian
     if (d.blockT > wait && canPass && laneClear(w, v)) { d.blockT = 0; d.passing = clear.blocker; d.bypassT = 3.5; }
@@ -537,7 +574,10 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
     const spot = v.parkingTarget = chooseCurb(w, v, goal);
     if (spot) {
       tx = spot.x; ty = spot.y;
-      target = Math.min(target, 4, Math.sqrt(5 * Math.max(0, Math.hypot(tx - P.x, ty - P.y) - 0.5)));
+      // Check the path into the reserved bay. A queue further along the travel
+      // lane can remain stopped for the entire duration of a valid pull-in.
+      const approach = clearance(w, v, panic, true, [spot]);
+      target = Math.min(roadSpeed, approach.cap, 4, Math.sqrt(5 * Math.max(0, Math.hypot(tx - P.x, ty - P.y) - 0.5)));
     }
   }
   if (d.merging && pt.axis) {
@@ -560,7 +600,7 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
     }
   }
   steerTo(v, tx, ty, target);
-  if (creeping && !d.curbBlocker) v.ctl.steer = 0;
+  if (creeping && !d.curbBlocker && !v.parkingTarget) v.ctl.steer = 0;
 }
 
 interface DriveGoal { stopAt: number; ram: boolean; speed?: number; frontage?: Segment }

@@ -73,6 +73,9 @@ export function seatPed(w: World, p: Ped, v: Vehicle, seat: number): void {
   if (p.vehicle) unseatPed(w, p, false);
   v.seats[seat] = p.id;
   if (seat === 0) {
+    const slot = w.registry.get(v)?.slot;
+    const bay = v.spot >= 0 ? v.spot : slot?.startsWith('parking:') ? Number(slot.slice(8)) : undefined;
+    v.departureBay = !p.player && v.spec.movement === 'wheels' && !v.spec.trailer ? bay : undefined;
     v.spot = -1;
     w.registry.drive(p, v);
   }
@@ -88,7 +91,7 @@ export function unseatPed(w: World, p: Ped, place = true): void {
   if (v) {
     w.registry.exit(p, v);
     const curbExit = p.seat === 0 && !!v.parkingTarget;
-    if (p.seat === 0) delete v.parkingTarget;
+    if (p.seat === 0) { delete v.parkingTarget; delete v.departureBay; }
     if (v.seats[p.seat] === p.id) v.seats[p.seat] = 0;
     if (place) placeBeside(w, p, v, p.seat % 2 === 0 && !curbExit ? -1 : 1);
   }

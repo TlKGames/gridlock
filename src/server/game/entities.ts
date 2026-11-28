@@ -87,6 +87,7 @@ export interface Ped {
 export interface Vehicle {
   vin: string;
   authorizedDriver?: number;
+  departureBay?: number;
   parkingTarget?: { x: number; y: number; angle: number; lot: number };
   id: number;
   kind: 'veh';

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { obbVsObb } from '../src/shared/sim/dynamic';
 import { pedIndex, vehicleIndex, weaponIndex } from '../src/shared/packs';
-import { stepVehicle } from '../src/shared/sim/physics';
+import { World } from '../src/server/game/world';
+import { forwardSpeed, stepVehicle } from '../src/shared/sim/physics';
 import { cruise, newDrive } from '../src/server/game/ai/driving';
 import { mayEnter, commitJunction, nextJunction } from '../src/server/game/ai/junctions';
 import { laneOf } from '../src/server/game/ai/route';
@@ -201,3 +202,76 @@ for (const traffic of [false, true]) {
   assert(crossed && truck.body.x < cab.body.x - 9 && Math.abs(truck.body.y - end.ey) < 0.7, 'truck clears taxi and returns before junction');
 }
 console.log('Box truck waits for oncoming traffic, clears an angled taxi and merges back');
+
+// A commuter leaving a perpendicular stall must get past the neighbouring row.
+// A parallel-parked commuter must make the same handoff with cars on both bumpers.
+for (const inLot of [false, true]) {
+  const scene = new World(1337);
+  const spots = scene.city.parking;
+  const index = spots.findIndex(s => {
+    if (inLot) return s.lot !== undefined && scene.city.lots[s.lot].use === 'parking' &&
+      scene.city.lots[s.lot].front !== -1 && spots.filter(o => o.lot === s.lot).length > 8;
+    const { seg, t } = scene.map.nearestSegment(s.x, s.y);
+    return s.lot === undefined && seg.axis === 'h' && t > 45;
+  });
+  const bay = spots[index], type = vehicleIndex('sedan');
+  const car = spawnVehicle(scene, type, bay.x, bay.y, bay.angle);
+  const resident = spawnPed(scene, pedIndex('civilian'), bay.x, bay.y);
+  const neighbours = spots.filter(o => o !== bay && o.lot === bay.lot && o.angle === bay.angle &&
+    Math.hypot(o.x - bay.x, o.y - bay.y) < (inLot ? 7 : 8)).map(o => spawnVehicle(scene, type, o.x, o.y, o.angle));
+  assert(neighbours.length >= 2);
+  if (inLot) {
+    // Another car is already stopped nose-to-nose with this stall.
+    const gap = car.spec.length + 0.08;
+    neighbours.push(spawnVehicle(scene, type, bay.x + gap * Math.cos(bay.angle),
+      bay.y + gap * Math.sin(bay.angle), bay.angle + Math.PI));
+  }
+  // Through traffic has priority over a car departing from the curb.
+  const seg = scene.map.nearestSegment(bay.x, bay.y).seg;
+  const direction = Math.cos(bay.angle) >= 0 ? 1 : -1;
+  const outer = laneOf(scene, seg, direction, seg.lanes - 1);
+  const passing = inLot ? undefined : spawnVehicle(scene, type, bay.x - direction * 13, outer.sy, bay.angle);
+  if (passing) passing.body.vx = direction * 11;
+  car.spot = index;
+  seatPed(scene, resident, car, 0);
+  let backedUp = false, departed = false;
+  const shape = (v: typeof car) => ({ ...v.body, hl: v.spec.length / 2, hw: v.spec.width / 2 });
+  for (let i = 0; i < 1800; i++) {
+    scene.time += 1 / 30;
+    if (passing) passing.body.x += passing.body.vx / 30;
+    scene.rebuildHashes();
+    cruise(scene, car, resident, 1 / 30);
+    stepVehicle(car.body, car.spec, car.ctl, 1 / 30, scene.statics, true);
+    backedUp ||= forwardSpeed(car.body) < -0.5;
+    assert(neighbours.every(o => !obbVsObb(shape(car), shape(o))), 'departure clears each parked car');
+    if (passing) assert(!obbVsObb(shape(car), shape(passing)), 'departure yields to approaching traffic');
+    if (car.departureBay === undefined && Math.hypot(car.body.x - bay.x, car.body.y - bay.y) > 12) {
+      departed = true;
+      break;
+    }
+  }
+  assert(departed, 'driver joins traffic and continues down the road');
+  if (inLot) assert(backedUp, 'driver uses reverse to manoeuvre out of the lot');
+}
+console.log('Occupied lot and curb departures passed.');
+
+{
+  const scene = new World(1337);
+  const street = scene.city.segs.find(s => s.axis === 'h' && s.lanes === 1 && s.x1 - s.x0 > 95)!;
+  const lane = laneOf(scene, street, 1, 0);
+  const x = lane.sx + 25, y = lane.sy;
+  const car = spawnVehicle(scene, vehicleIndex('sedan'), x, y, 0);
+  const resident = spawnPed(scene, pedIndex('civilian'), x, y);
+  seatPed(scene, resident, car, 0);
+  const obstacle = spawnVehicle(scene, car.type, x + car.spec.length + 0.12, y, 0);
+  let reversed = false;
+  for (let i = 0; i < 1500 && car.body.x < obstacle.body.x + 9; i++) {
+    scene.time += 1 / 30; scene.rebuildHashes();
+    cruise(scene, car, resident, 1 / 30);
+    stepVehicle(car.body, car.spec, car.ctl, 1 / 30, scene.statics, true);
+    reversed ||= forwardSpeed(car.body) < -0.4;
+    const shape = (v: typeof car) => ({ ...v.body, hl: v.spec.length / 2, hw: v.spec.width / 2 });
+    assert(!obbVsObb(shape(car), shape(obstacle)));
+  }
+  assert(reversed && car.body.x > obstacle.body.x + 8, 'boxed-in driver backs up and replans around a stationary road obstruction');
+}
