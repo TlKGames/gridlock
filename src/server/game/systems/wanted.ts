@@ -35,7 +35,8 @@ export function lawCanSee(w: World, x: number, y: number, range = RULES.heatSigh
 function civilianWitness(w: World, x: number, y: number, offender: Ped): boolean {
   let seen = false;
   w.pedsNear(x, y, RULES.witnessRange, (p) => {
-    if (!seen && !p.dead && !p.player && p !== offender && witnessFaction(p.faction)) seen = true;
+    if (seen || p.dead || p.player || p === offender || !witnessFaction(p.faction)) return;
+    if (!w.statics.raycast(p.body.x, p.body.y, x, y, 1.4)) seen = true;
   });
   return seen;
 }
