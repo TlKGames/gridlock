@@ -1,4 +1,5 @@
 // The room keeps the registration when a parked vehicle leaves an observer's simulation.
+import { parkedAngle, parkingFits } from './ai/parking';
 import { randomUUID } from 'node:crypto';
 import { rectContains, type Rect } from '../../shared/math';
 import type { Census } from './census';
@@ -13,7 +14,7 @@ type Spot = { x: number; y: number };
 export interface Registration {
   vin: string; model: string; color: number; hp: number; angle: number; at: Spot;
   owner: string; parked: Spot; taken: boolean; reported: boolean; disguised: boolean;
-  stored?: boolean; slot?: string;
+  stored?: boolean; slot?: string; parkedLot?: number;
   holder?: string; lastDriver?: string;
 }
 export const newVin = () => randomUUID();
@@ -96,6 +97,7 @@ export class VehicleRegistry {
     if (!r) return;
     if (p.player && r.owner === keeper(p)) v.owner = p.player.id;
     this.releaseSlot(r);
+    delete r.parkedLot;
     r.holder = v.authorizedDriver === p.id ? r.owner : keeper(p);
     r.lastDriver = r.holder;
     if (r.holder === r.owner) {
@@ -109,6 +111,7 @@ export class VehicleRegistry {
     if (spot && Math.hypot(v.body.x - spot.x, v.body.y - spot.y) < 1.2) {
       const i = this.parkingIndex(spot.x, spot.y);
       if (i !== undefined && !this.atSlot('parking:' + i)) {
+        if (p.resident && r.holder === r.owner) r.parkedLot = spot.lot;
         r.slot = 'parking:' + i;
         this.slots.set(r.slot, r);
         v.spot = i;
@@ -164,6 +167,18 @@ export class VehicleRegistry {
     for (const r of records) if (VEHICLES.some(v => v.id === r.model)) {
       if (!r.taken && r.holder === r.owner) r.parked = { ...r.at };
       r.holder = undefined;
+      // Older commuters saved their final approach pose. Only correct a claimed bay
+      // when the car is still there and the corrected footprint is clear.
+      const bay = r.slot?.startsWith('parking:') && this.w.city.parking[Number(r.slot.slice(8))];
+      if (bay && r.owner.startsWith('house:') && !r.taken && !r.stored && Math.hypot(r.at.x - bay.x, r.at.y - bay.y) < 1.5) {
+        const angle = parkedAngle(r.vin, r.angle, bay.angle);
+        const spec = VEHICLES.find(v => v.id === r.model)!;
+        if (parkingFits(this.w, spec, { ...bay, angle })) {
+          r.angle = angle;
+          r.at = { x: bay.x, y: bay.y };
+          r.parked = { ...r.at };
+        }
+      }
       this.index(r);
     }
     // Reserve the original saved bays first, then repair older in-lane registrations.

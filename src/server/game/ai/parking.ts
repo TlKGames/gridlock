@@ -25,6 +25,31 @@ export function parkingFits(w: World, spec: VehicleSpec, pose: Pose, self?: Vehi
   return true;
 }
 
+// Most drivers straighten their wheels. A few keep a small amount of their approach angle.
+export function parkedAngle(vin: string, incoming: number, bay: number): number {
+  const relaxed = parseInt(vin.slice(0, 8), 16) % 8 === 0;
+  return bay + (relaxed ? Math.max(-0.05, Math.min(0.05, angleDiff(bay, incoming))) : 0);
+}
+
+export function finishParking(w: World, v: Vehicle, pose: Pose, dt: number): boolean {
+  const angle = parkedAngle(v.vin, v.body.angle, pose.angle);
+  if (!parkingFits(w, v.spec, { ...pose, angle }, v)) {
+    delete v.parkingTarget;
+    return false;
+  }
+  v.ctl.throttle = 0;
+  v.ctl.handbrake = true;
+  v.body.vx = v.body.vy = v.body.av = 0;
+  const turn = angleDiff(v.body.angle, angle);
+  v.body.angle += Math.max(-dt, Math.min(dt, turn));
+  const dx = pose.x - v.body.x, dy = pose.y - v.body.y;
+  const distance = Math.hypot(dx, dy);
+  const step = Math.min(1, dt / Math.max(distance, 0.001));
+  v.body.x += dx * step;
+  v.body.y += dy * step;
+  return distance <= dt && Math.abs(turn) <= dt;
+}
+
 function clearParkingApproach(w: World, v: Vehicle, pose: Pose): boolean {
   const b = v.body, dx = pose.x - b.x, dy = pose.y - b.y;
   const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy)));

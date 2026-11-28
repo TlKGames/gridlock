@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { parkingFits, chooseCurb } from '../src/server/game/ai/parking';
+import { angleDiff } from '../src/shared/math';
+import { parkedAngle, parkingFits, chooseCurb } from '../src/server/game/ai/parking';
 import { RULES, VEHICLES, pedWith } from '../src/shared/packs';
 import { World } from '../src/server/game/world';
 import { spawnPed, removePed, spawnVehicle, seatPed } from '../src/server/game/factory';
@@ -66,6 +67,11 @@ assert(vType >= 0);
   pool.update();
   for (let i = 0; i < 1500 && p.vehicle; i++) { tick(); updateVehicles(w, 1 / 30); }
   assert.equal(p.vehicle, 0, 'driver stops and gets out at the destination curb');
+  const bay = w.city.parking[w.registry.parkingIndex(car.body.x, car.body.y)!];
+  assert(bay, 'vehicle finishes centered in its chosen bay');
+  assert(Math.abs(angleDiff(car.body.angle, bay.angle)) <= 0.051, 'driver straightens before leaving the car');
+  assert.equal(parkedAngle('00000001', 0.3, 0), 0);
+  assert.equal(parkedAngle('00000008', 0.3, 0), 0.05);
   for (let i = 0; i < 3600 && p.arrivedAt !== goal.lot; i++) tick();
   assert.equal(p.arrivedAt, goal.lot);
 }
@@ -131,6 +137,9 @@ console.log('Multi-street overnight round trip, checkpoint resumption, and curb-
   reopened.registry.setCensus(roster);
   const fleet2 = new HouseholdParking(reopened, roster);
   assert.equal(reopened.registry.find(vin)!.slot, city.registry.find(vin)!.slot);
+  // Simulate an older save whose owner streamed out on the walk from curb to door.
+  delete worker.occupiedLot;
+  delete reopened.registry.find(vin)!.parkedLot;
   const manager2 = new ResidentPool(reopened, roster, fleet2);
   const car = reopened.registry.find(vin)!;
   const origin = { ...car.at };
@@ -138,6 +147,12 @@ console.log('Multi-street overnight round trip, checkpoint resumption, and curb-
   // Only this origin is observed, as in a player waiting outside the workplace.
   reopened.nearestPlayerDist2 = (x, y) => (origin.x - x) ** 2 + (origin.y - y) ** 2;
   reopened.players.set(1, {} as never);
+  reopened.registry.show(car);
+  for (let i = 0; i < RULES.pedCapPerPlayer; i++) {
+    const staff = spawnPed(reopened, pedWith('civilian'), 0, 0);
+    staff.persistent = true;
+    staff.ai = null;
+  }
   for (let frame = 0; frame < 5400; frame++) {
     reopened.time += 1 / 30;
     reopened.gameMinutes = (reopened.gameMinutes + RULES.gameMinutesPerSecond / 30) % 1440;

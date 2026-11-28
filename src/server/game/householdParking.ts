@@ -98,12 +98,13 @@ export class HouseholdParking {
     const spec = VEHICLES[vehicleIndex(car.model)];
     for (const i of this.nearby(lot)) {
       const slot = 'parking:' + i;
-      if (car.slot === slot) return true;
+      if (car.slot === slot) { car.parkedLot = lot; return true; }
       const bay = this.w.city.parking[i];
       // Leave enough room to swing out of a parallel space even at shift change.
       if (bay.lot === undefined && this.crowdedCurb(i, car)) continue;
       if (this.w.registry.atSlot(slot) || this.w.nearestPlayerDist2(bay.x, bay.y) < 70 ** 2 || !parkingFits(this.w, spec, bay)) continue;
       this.w.registry.parkHousehold(car, i);
+      car.parkedLot = lot;
       return true;
     }
     return false;

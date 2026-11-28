@@ -113,7 +113,23 @@ export class ResidentPool {
         if (r.occupiedLot === lot) continue;
         const car = this.w.registry.find(r.commuteVin!);
         if (r.occupiedLot !== undefined && this.nearLot(r.occupiedLot)) continue;
-        if (car && this.w.nearestPlayerDist2(car.parked.x, car.parked.y) < RULES.spawnRadius[1] ** 2) continue;
+        if (car && this.w.nearestPlayerDist2(car.parked.x, car.parked.y) < RULES.spawnRadius[1] ** 2) {
+          // A driver can stream out between leaving the car and reaching the door.
+          if (r.occupiedLot === undefined && car.slot?.startsWith('parking:') && !car.taken && !car.stored) {
+            const home = this.census.households[r.household - 1].lot;
+            const places = [home, ...(r.job ? [r.job.lot] : [])];
+            const distance = (id: number) => {
+              const door = this.goal(id).entrance;
+              return Math.hypot(car.parked.x - door.x, car.parked.y - door.y);
+            };
+            const origin = car.parkedLot ?? places.sort((a, b) => distance(a) - distance(b))[0];
+            if (car.parkedLot !== undefined || distance(origin) <= 100) {
+              r.occupiedLot = origin;
+              this.occupants.add(r);
+            }
+          }
+          continue;
+        }
         // The resident can travel without a missing or impounded vehicle.
         if (!car || car.taken || car.reported || car.stored || this.parking.park(car, lot)) {
           r.occupiedLot = lot;
@@ -126,12 +142,22 @@ export class ResidentPool {
       const old = r.occupiedLot;
       if (old === undefined || r.deceased) { this.occupants.delete(r); continue; }
       const due = scheduledLot(this.census, r, this.w.gameMinutes) !== old;
-      if (r.commuteVin && !this.nearLot(old)) continue;
+      const ride = due && r.commuteVin ? this.w.registry.find(r.commuteVin) : undefined;
+      const observedCar = !!ride && this.w.nearestPlayerDist2(ride.parked.x, ride.parked.y) < RULES.spawnRadius[1] ** 2;
+      if (r.commuteVin && !observedCar && !this.nearLot(old)) continue;
       const goal = this.goal(old);
       const near = this.w.nearestPlayerDist2(goal.entrance.x, goal.entrance.y) < RULES.spawnRadius[1] ** 2;
       if (!near && due && !r.commuteVin) { delete r.occupiedLot; this.occupants.delete(r); continue; }
-      if (!near || (!due && !goal.indoors)) continue;
-      if (this.w.peds.size >= Math.min(RULES.pedCap, this.w.players.size * RULES.pedCapPerPlayer)) continue;
+      if ((!near && !observedCar) || (!due && !goal.indoors)) continue;
+      // Seated traffic and permanent shop staff used to exhaust the walking
+      // budget indefinitely for a player who stayed on the same block.
+      const cap = Math.min(RULES.pedCap, this.w.players.size * RULES.pedCapPerPlayer);
+      if (this.w.peds.size >= cap) {
+        if (!observedCar || this.w.peds.size >= RULES.pedCap) continue;
+        let walkers = 0;
+        for (const p of this.w.peds.values()) if (!p.vehicle && !p.persistent && !p.player) walkers++;
+        if (walkers >= cap) continue;
+      }
       const at = goal.indoors ? indoorSpot(this.w, goal, r.id) : goal.entrance;
       const arch = r.archetype ? pedIndex(r.archetype) : pedWith('civilian');
       const ped = spawnPed(this.w, arch, at.x, at.y);
@@ -172,7 +198,8 @@ export class ResidentPool {
     if (!resident.job) return;
     const lot = scheduledLot(this.census, resident, this.w.gameMinutes);
     if (ped.commute?.lot === lot) return;
-    const previous = resident.occupiedLot ?? ped.arrivedAt;
+    const parked = resident.commuteVin ? this.w.registry.find(resident.commuteVin) : undefined;
+    const previous = resident.occupiedLot ?? ped.arrivedAt ?? parked?.parkedLot;
     delete resident.occupiedLot;
     this.occupants.delete(resident);
     const goal = this.goal(lot);
@@ -182,7 +209,7 @@ export class ResidentPool {
       for (const car of this.w.registry.owned('house:' + resident.household) ?? []) {
         const driver = this.parking?.driverByVin.get(car.vin);
         if ((driver && driver !== resident) || (resident.commuteVin && resident.commuteVin !== car.vin)) continue;
-        if (car.stored || car.reported || (car.holder === car.owner) || Math.hypot(car.parked.x - ped.body.x, car.parked.y - ped.body.y) > 100) continue;
+        if (car.stored || car.reported || (car.holder === car.owner) || (car.parkedLot !== previous && Math.hypot(car.parked.x - ped.body.x, car.parked.y - ped.body.y) > 100)) continue;
         ped.collectingVin = car.vin;
         ped.commute = pickupDestination(this.w, previous, car.parked);
         break;

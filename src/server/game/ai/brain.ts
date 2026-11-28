@@ -11,6 +11,7 @@ import { BEHAVIOURS } from './behaviours';
 import { interruptCommute, walkCommute } from './commute';
 import { streetGoal } from './doors';
 import { waitForTrain } from './crossings';
+import { finishParking } from './parking';
 import { cruise, driveTo } from './driving';
 import { soldierHostile } from './soldiers';
 import { armBest, arrest, attack, extinguish, flee, returnToVehicle, revive, setTask, standAt, wander } from './tasks';
@@ -101,7 +102,7 @@ function vehicleTask(w: World, p: Ped, dt: number): void {
       const spot = v.parkingTarget;
       if (goal && spot && spot.lot === goal.lot && Math.hypot(v.body.x - spot.x, v.body.y - spot.y) < 1.2 &&
           Math.hypot(v.body.vx, v.body.vy) < 1.2) {
-        v.ctl.throttle = 0; v.ctl.handbrake = true;
+        if (!finishParking(w, v, spot, dt)) break;
         unseatPed(w, p, true);
         setTask(p, 'wander');
         break;
