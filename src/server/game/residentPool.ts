@@ -43,13 +43,13 @@ export class ResidentPool {
     entries.push({ resident, lot });
   }
 
-  nearby(x: number, y: number): Resident | undefined {
+  nearby(x: number, y: number, eligible?: (r: Resident) => boolean): Resident | undefined {
     const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
     const candidates: Resident[] = [];
     for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
       for (const { resident, lot } of this.cells.get(key(cx + dx, cy + dy)) ?? []) {
         if (resident.deceased || resident.occupiedLot !== undefined || this.walking.has(resident) || this.w.peds.has(this.active.get(resident.id) ?? 0)) continue;
-        if (scheduledLot(this.census, resident, this.w.gameMinutes) === lot) candidates.push(resident);
+        if ((!eligible || eligible(resident)) && scheduledLot(this.census, resident, this.w.gameMinutes) === lot) candidates.push(resident);
       }
     }
     return candidates.length ? this.w.rng.pick(candidates) : undefined;

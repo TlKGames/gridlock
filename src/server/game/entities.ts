@@ -82,7 +82,7 @@ export interface Ped {
 
 export interface Vehicle {
   vin: string;
-  parkedHousehold?: number;
+  authorizedDriver?: number;
   id: number;
   kind: 'veh';
   type: number;

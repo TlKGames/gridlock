@@ -236,9 +236,8 @@ export class Economy {
       } else if (!registration) removeVehicle(w, old);
     }
     const pad = place.pad ?? { x: place.x, y: place.y, angle: 0 };
-    const v = spawnVehicle(w, vi, pad.x, pad.y, pad.angle);
+    const v = spawnVehicle(w, vi, pad.x, pad.y, pad.angle, -1, { owner: 'player:' + pl.ownerKey });
     w.statics.resolveObb(v.body, v.spec.length / 2, v.spec.width / 2);
-    w.registry.register(v, 'player:' + pl.ownerKey);
     v.owner = pl.id;
     v.persistent = true;
     pl.garageCar = v.id;

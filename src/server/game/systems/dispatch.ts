@@ -63,6 +63,7 @@ export class Dispatch {
       if (i >= v.seats.length) return;
       const p = spawnPed(w, pedIndex(arch), x, y, angle);
       p.persistent = true;
+      if (i === 0) v.authorizedDriver = p.id;
       seatPed(w, p, v, i);
       p.ai!.squad = squad.id;
       p.ai!.crew = v.id;

@@ -1,6 +1,8 @@
 // The room keeps the registration when a parked vehicle leaves an observer's simulation.
 import { randomUUID } from 'node:crypto';
-import { VEHICLES } from '../../shared/packs';
+import { rectContains, type Rect } from '../../shared/math';
+import type { Census } from './census';
+import { SERVICES, VEHICLES } from '../../shared/packs';
 import type { Ped, Vehicle } from './entities';
 import { spawnVehicle } from './factory';
 import type { World } from './world';
@@ -9,7 +11,7 @@ type Spot = { x: number; y: number };
 export interface Registration {
   vin: string; model: string; color: number; hp: number; angle: number; at: Spot;
   owner: string; parked: Spot; taken: boolean; reported: boolean; disguised: boolean;
-  stored?: boolean;
+  stored?: boolean; slot?: string;
   holder?: string; lastDriver?: string;
 }
 export const newVin = () => randomUUID();
@@ -23,9 +25,37 @@ export class VehicleRegistry {
   private live = new Map<string, Vehicle>();
   private byOwner = new Map<string, Set<Registration>>();
 
+  private households: number[] = [];
+  private districts = new Map<number, number[]>();
+  private dealerLots: Rect[] = [];
+  private slots = new Map<string, Registration>();
+
   constructor(private w: World) {}
 
+  setCensus(census: Census): void {
+    const { city } = this.w;
+    this.households = census.households.map(h => h.id);
+    this.districts.clear();
+    for (const h of census.households) {
+      const district = city.blocks[city.lots[h.lot].block].district;
+      let ids = this.districts.get(district);
+      if (!ids) this.districts.set(district, ids = []);
+      ids.push(h.id);
+    }
+    this.dealerLots = city.services.filter(p => SERVICES[p.spec].verb === 'dealer').map(p => city.lots[p.lot].rect);
+  }
+  atSlot(slot: string) { return this.slots.get(slot); }
+  leaveSlot(v: Vehicle): void {
+    const r = this.get(v);
+    if (r) this.releaseSlot(r);
+  }
+  private releaseSlot(r: Registration): void {
+    if (r.slot) this.slots.delete(r.slot);
+    delete r.slot;
+  }
+
   private index(r: Registration): void {
+    if (r.slot) this.slots.set(r.slot, r);
     this.records.set(r.vin, r);
     let list = this.byOwner.get(r.owner);
     if (!list) this.byOwner.set(r.owner, list = new Set());
@@ -34,10 +64,15 @@ export class VehicleRegistry {
   owned(owner: string) { return this.byOwner.get(owner); }
   get(v: Vehicle) { return this.records.get(v.vin); }
   find(vin: string) { return this.records.get(vin); }
-  register(v: Vehicle, owner: string): void {
+  registerSpawn(v: Vehicle, owner?: string, slot?: string): void {
     if (this.get(v)) return;
     const { x, y, angle } = v.body;
-    this.index({ vin: v.vin, owner, model: v.spec.id, at: { x, y }, parked: { x, y }, angle,
+    if (!owner) {
+      if (v.spec.movement !== 'wheels' || !this.households.length || this.dealerLots.some(lot => rectContains(lot, x, y))) return;
+      const pool = this.districts.get(this.w.map.districtAt(x, y)) ?? this.households;
+      owner = 'house:' + pool[parseInt(v.vin.slice(0, 8), 16) % pool.length];
+    }
+    this.index({ vin: v.vin, owner, slot, model: v.spec.id, at: { x, y }, parked: { x, y }, angle,
       hp: v.hp, color: v.color, taken: false, reported: false, disguised: false });
     this.live.set(v.vin, v);
   }
@@ -45,7 +80,8 @@ export class VehicleRegistry {
     const r = this.get(v);
     if (!r) return;
     if (p.player && r.owner === keeper(p)) v.owner = p.player.id;
-    r.holder = keeper(p);
+    this.releaseSlot(r);
+    r.holder = v.authorizedDriver === p.id ? r.owner : keeper(p);
     r.lastDriver = r.holder;
     if (r.holder === r.owner) {
       r.reported = r.taken = r.disguised = false;
@@ -54,7 +90,7 @@ export class VehicleRegistry {
   exit(p: Ped, v: Vehicle): void {
     const r = this.get(v);
     if (!r || p.seat !== 0) return;
-    if (keeper(p) === r.owner) r.parked = { x: v.body.x, y: v.body.y };
+    if (r.holder === r.owner) r.parked = { x: v.body.x, y: v.body.y };
     r.holder = undefined;
   }
   location(r: Registration): Spot { return this.live.get(r.vin)?.body ?? r.at; }
@@ -90,6 +126,7 @@ export class VehicleRegistry {
       if (!r.taken && r.holder === r.owner) r.parked = { ...r.at };
       r.holder = undefined;
     } else {
+      this.releaseSlot(r);
       this.records.delete(r.vin);
       this.byOwner.get(r.owner)?.delete(r);
     }
@@ -109,7 +146,7 @@ export class VehicleRegistry {
     delete r.stored;
     const live = this.live.get(r.vin);
     if (live) return live;
-    const v = spawnVehicle(this.w, VEHICLES.findIndex(s => s.id === r.model), r.at.x, r.at.y, r.angle, r.color, r.vin);
+    const v = spawnVehicle(this.w, VEHICLES.findIndex(s => s.id === r.model), r.at.x, r.at.y, r.angle, r.color, { vin: r.vin });
     v.hp = r.hp;
     this.live.set(v.vin, v);
     return v;
@@ -119,7 +156,7 @@ export class VehicleRegistry {
     for (const r of this.records.values()) {
       const v = this.live.get(r.vin);
       if (v && r.owner.startsWith('player:')) v.owner = owners.get(r.owner) ?? 0;
-      if (!r.stored && !v && this.w.nearestPlayerDist2(r.at.x, r.at.y) < 85 ** 2) this.show(r);
+      if (!r.stored && !r.slot && !v && this.w.nearestPlayerDist2(r.at.x, r.at.y) < 85 ** 2) this.show(r);
     }
     for (const p of this.w.peds.values()) this.checkSpot(p);
   }

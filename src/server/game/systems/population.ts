@@ -1,5 +1,6 @@
 // Keeps the streets alive around players: ambient peds, traffic, parked cars, and
 // the fixed vehicles/guards at services. Despawns what nobody can see.
+import { Rng } from '../../../shared/rng';
 import { dist2 } from '../../../shared/math';
 import { flies } from '../../../shared/sim/kinds';
 import { type PedArchetype, PEDS, ROLE_CREWS, RULES, SERVICES, VEHICLES, ZONES, pedIndex, pedWith, vehicleIndex } from '../../../shared/packs';
@@ -40,7 +41,10 @@ export class Population {
   private residents?: ResidentPool;
 
   constructor(private w: World, census?: Census) {
-    if (census) this.residents = new ResidentPool(w, census);
+    if (census) {
+      w.registry.setCensus(census);
+      this.residents = new ResidentPool(w, census);
+    }
     w.city.parking.forEach((s, i) => {
       const k = Math.floor(s.y / BUCKET) * 64 + Math.floor(s.x / BUCKET);
       let arr = this.spotBuckets.get(k);
@@ -211,15 +215,14 @@ export class Population {
       const gangRide = gang && sp.roles.includes('gang');
       const driver = this.driverFor(type, zone, gang);
       const civil = PEDS[driver].behaviour === 'civilian';
-      const resident = civil ? this.residents?.nearby(s.x, s.y) : undefined;
-      if (this.residents && civil && (!resident || w.registry.owned('house:' + resident.household)?.size)) continue;
-      const v = spawnVehicle(w, type, s.x, s.y, s.angle, gangRide ? gangCarColor(gang) ?? -1 : -1);
+      const resident = civil ? this.residents?.nearby(s.x, s.y, r => !w.registry.owned('house:' + r.household)?.size) : undefined;
+      if (this.residents && civil && !resident) continue;
+      const v = spawnVehicle(w, type, s.x, s.y, s.angle, gangRide ? gangCarColor(gang) ?? -1 : -1,
+        { owner: resident && 'house:' + resident.household });
       v.body.vx = Math.cos(s.angle) * 8; v.body.vy = Math.sin(s.angle) * 8;
       const d = spawnPed(w, resident?.archetype ? pedIndex(resident.archetype) : driver, s.x, s.y, s.angle);
-      if (resident) {
-        this.residents!.bind(resident, d);
-        w.registry.register(v, 'house:' + resident.household);
-      }
+      if (resident) this.residents!.bind(resident, d);
+      v.authorizedDriver = d.id;
       seatPed(w, d, v, 0);
       setTask(d, 'drive');
       const rc = roleCrew(type);
@@ -249,19 +252,27 @@ export class Population {
     for (const si of seen) {
       if (this.spotState.has(si)) continue;
       const s = w.city.parking[si];
+      const slot = 'parking:' + si;
+      const saved = w.registry.atSlot(slot);
+      if (saved) {
+        const v = w.registry.show(saved);
+        v.spot = si;
+        this.spotState.set(si, v.id);
+        continue;
+      }
       if (w.nearestPlayerDist2(s.x, s.y) < 70 * 70) continue; // don't pop in view
       let occupied = false;
       w.vehiclesNear(s.x, s.y, 3, () => { occupied = true; });
       if (occupied) continue;
       const z = ZONES[s.zone < 0 ? 0 : s.zone];
       const chance = s.lot !== undefined ? 0.3 : z.parkedDensity * 0.16;
-      if (!w.rng.chance(chance) || w.vehicles.size > RULES.vehicleCap) { this.spotState.set(si, 0); continue; }
+      // A persistent car should not accumulate in every bay as players revisit the block.
+      const parkingRoll = new Rng(w.seed ^ Math.imul(si + 1, 0x85ebca6b));
+      if (!parkingRoll.chance(chance) || w.vehicles.size > RULES.vehicleCap) { this.spotState.set(si, 0); continue; }
       const type = vehicleIndex(w.rng.weighted(z.parked).id);
       const gang = turfGang(w.map.districtAt(s.x, s.y));
       const tint = gang && VEHICLES[type].roles.includes('gang') ? gangCarColor(gang) ?? -1 : -1;
-      const v = spawnVehicle(w, type, s.x, s.y, s.angle, tint);
-      const local = this.residents?.nearby(s.x, s.y);
-      if (local && !w.registry.owned('house:' + local.household)?.size) v.parkedHousehold = local.household;
+      const v = spawnVehicle(w, type, s.x, s.y, s.angle, tint, { slot });
       v.spot = si;
       this.spotState.set(si, v.id);
     }
@@ -269,23 +280,35 @@ export class Population {
       if (seen.has(si)) continue;
       this.spotState.delete(si);
       const v = vid ? w.vehicles.get(vid) : undefined;
-      if (v && v.spot === si && !v.seats.some((s) => s) && !v.persistent && !v.owner) removeVehicle(w, v);
+      if (v && v.spot === si && !v.seats.some((s) => s) && !v.persistent && !v.owner) removeVehicle(w, v, true);
     }
   }
 
   private fixedSpawns(): void {
     const w = this.w;
-    for (const f of this.fixed) {
+    for (const [index, f] of this.fixed.entries()) {
+      const slot = 'fixed:' + index;
       const near = w.nearestPlayerDist2(f.x, f.y);
       const v = f.veh ? w.vehicles.get(f.veh) : undefined;
-      if (v && dist2(v.body.x, v.body.y, f.x, f.y) > 15 * 15) { f.veh = 0; f.readyAt = w.time + 150; v.spot = -1; continue; }
+      if (v && dist2(v.body.x, v.body.y, f.x, f.y) > 15 * 15) {
+        w.registry.leaveSlot(v);
+        f.veh = 0; f.readyAt = w.time + 150; v.spot = -1;
+        continue;
+      }
       if (!v) f.veh = 0;
-      if (v && near > 300 * 300 && !v.seats.some((s) => s)) { removeVehicle(w, v); f.veh = 0; continue; }
+      if (v && near > 300 * 300 && !v.seats.some((s) => s)) { removeVehicle(w, v, true); f.veh = 0; continue; }
+      const saved = !f.veh && w.registry.atSlot(slot);
+      if (saved && near < 240 * 240) {
+        const restored = w.registry.show(saved);
+        restored.spot = -2;
+        f.veh = restored.id;
+        continue;
+      }
       if (!f.veh && near < 240 * 240 && near > 60 * 60 && w.time >= f.readyAt) {
         let blocked = false;
         w.vehiclesNear(f.x, f.y, 5, () => { blocked = true; });
         if (blocked) continue;
-        const nv = spawnVehicle(w, f.type, f.x, f.y, f.angle);
+        const nv = spawnVehicle(w, f.type, f.x, f.y, f.angle, -1, { slot });
         nv.spot = -2;
         f.veh = nv.id;
       }

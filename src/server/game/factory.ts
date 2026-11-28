@@ -52,11 +52,11 @@ export function giveWeapon(p: Ped, wi: number, ammo: number): number {
   return p.weapons.findIndex((h) => h.w === wi);
 }
 
-export function spawnVehicle(w: World, type: number, x: number, y: number, angle: number, color = -1, vin: string = newVin()): Vehicle {
+export function spawnVehicle(w: World, type: number, x: number, y: number, angle: number, color = -1, registration: { vin?: string; owner?: string; slot?: string } = {}): Vehicle {
   const spec = VEHICLES[type];
   const pal = paletteFor(spec.colors);
   const v: Vehicle = {
-    vin, id: w.id(), kind: 'veh', type, spec, body: newBody(x, y, angle), ctl: emptyControls(),
+    vin: registration.vin ?? newVin(), id: w.id(), kind: 'veh', type, spec, body: newBody(x, y, angle), ctl: emptyControls(),
     color: color >= 0 ? color : pal[Math.floor(w.rng.next() * pal.length)],
     hp: spec.hp, burning: -1, wrecked: false, wreckT: 0,
     seats: new Array(Math.max(1, spec.seats)).fill(0),
@@ -64,6 +64,7 @@ export function spawnVehicle(w: World, type: number, x: number, y: number, angle
     stolenBy: 0, horn: false, trailer: angle, dents: [0, 0, 0, 0],
     stamina: spec.stamina?.gallop ?? 0, blown: false, calledBy: 0, rearT: 0, boltT: 0, boltX: 0, boltY: 0,
   };
+  w.registry.registerSpawn(v, registration.owner, registration.slot);
   w.vehicles.set(v.id, v);
   return v;
 }
@@ -72,10 +73,7 @@ export function seatPed(w: World, p: Ped, v: Vehicle, seat: number): void {
   if (p.vehicle) unseatPed(w, p, false);
   v.seats[seat] = p.id;
   if (seat === 0) {
-    if (v.parkedHousehold !== undefined) {
-      w.registry.register(v, 'house:' + v.parkedHousehold);
-      delete v.parkedHousehold;
-    }
+    v.spot = -1;
     w.registry.drive(p, v);
   }
   p.vehicle = v.id;
