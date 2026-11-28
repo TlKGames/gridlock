@@ -6,6 +6,7 @@ import type { Ped, TaskName } from '../entities';
 import { freeSeat, seatPed } from '../factory';
 import type { World } from '../world';
 import { CYCLE } from '../../../shared/world/traffic';
+import { footDirection, resetFootRoute } from './footNavigation';
 import { safeToCross } from './pedCrossings';
 import { MEDICAL_TIMEOUT, nextPatient, needsMedic } from './medicalScene';
 import { reachDist } from './doors';
@@ -14,6 +15,7 @@ import { route } from '../systems/lifts';
 
 export function setTask(p: Ped, task: TaskName, target = 0, tx = 0, ty = 0): void {
   const ai = p.ai!;
+  resetFootRoute(p);
   ai.task = task; ai.t = 0; ai.target = target; ai.tx = tx; ai.ty = ty; ai.workT = 0;
   if (task !== 'wander') ai.crossing = 'none';
 }
@@ -23,26 +25,17 @@ function stop(p: Ped): void {
 }
 
 /** Steers toward a point with simple unsticking. Returns remaining distance. */
-export function moveToward(w: World, p: Ped, tx: number, ty: number, speed: number, dt: number): number {
-  const ai = p.ai!;
+export function moveToward(w: World, p: Ped, tx: number, ty: number, speed: number, _dt: number): number {
   // Someone on another floor of a building (world/levels.ts): go via its door and lift.
   const via = route(w, p, tx, ty);
   if (via) { tx = via.x; ty = via.y; }
   const dx = tx - p.body.x, dy = ty - p.body.y;
   const d = Math.hypot(dx, dy);
   if (d < 0.05) { stop(p); return d; }
-  let mx = dx / d, my = dy / d;
-  if (ai.sideT > 0) {
-    ai.sideT -= dt;
-    mx += -my * ai.sideDir * 1.4; my += mx * ai.sideDir * 1.4;
-    const m = Math.hypot(mx, my); mx /= m; my /= m;
-  }
+  const { x: mx, y: my } = footDirection(w, p, { x: tx, y: ty }, speed);
   const k = speed / Math.max(speed, p.spec.runSpeed);
   p.ctl.mx = mx * k; p.ctl.my = my * k;
   p.ctl.sprint = speed > p.spec.walkSpeed * 1.5;
-  const moving = Math.hypot(p.body.vx, p.body.vy);
-  if (moving < speed * 0.25) ai.stuckT += dt; else ai.stuckT = Math.max(0, ai.stuckT - dt);
-  if (ai.stuckT > 0.8) { ai.stuckT = 0; ai.sideT = 1.2; ai.sideDir = w.rng.chance(0.5) ? 1 : -1; }
   if (!p.trigger) p.aim = Math.atan2(my, mx);
   return d;
 }

@@ -58,10 +58,15 @@ export function resolveContacts(w: World): void {
       if (o.id <= p.id || o.dead || o.vehicle) return;
       const dx = o.body.x - p.body.x, dy = o.body.y - p.body.y;
       const d2 = dx * dx + dy * dy, min = PED_RADIUS * 2;
-      if (d2 >= min * min || d2 < 1e-6) return;
+      if (d2 >= min * min) return;
       const d = Math.sqrt(d2), push = (min - d) / 2;
-      p.body.x -= (dx / d) * push; p.body.y -= (dy / d) * push;
-      o.body.x += (dx / d) * push; o.body.y += (dy / d) * push;
+      // Spawning at an identical position has no separation normal.
+      const nx = d > 0 ? dx / d : Math.cos(p.body.angle + Math.PI / 2);
+      const ny = d > 0 ? dy / d : Math.sin(p.body.angle + Math.PI / 2);
+      p.body.x -= nx * push; p.body.y -= ny * push;
+      o.body.x += nx * push; o.body.y += ny * push;
+      w.statics.resolveCircle(p.body, PED_RADIUS);
+      w.statics.resolveCircle(o.body, PED_RADIUS);
     });
   }
 }

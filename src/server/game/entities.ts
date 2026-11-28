@@ -38,8 +38,6 @@ export interface Ai {
   panicT: number;
   enemy: number;            // ped id this ped holds a grudge against
   enemyT: number;
-  stuckT: number;
-  sideT: number; sideDir: number;
   workT: number;
 }
 
