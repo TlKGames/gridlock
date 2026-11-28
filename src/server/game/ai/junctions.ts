@@ -15,7 +15,7 @@ const inBox = (n: RoadNode, x: number, y: number, pad = 0) => Math.abs(x - n.x) 
 
 // Keep arrival order while drivers wait, including the short interval between passing
 // the stop line and entering the box. Stale entries from abandoned approaches expire.
-const arrivals = new WeakMap<Vehicle, { node: RoadNode; at: number; seen: number; heading: number; turn: boolean }>();
+const arrivals = new WeakMap<Vehicle, { node: RoadNode; at: number; seen: number; heading: number; turn: boolean; urgent: boolean }>();
 
 // A driver commits before its centre reaches the box. Protect that interval and
 // the turn itself until the rear clears, even if the traffic light changes.
@@ -36,7 +36,7 @@ function toBox(v: Vehicle, n: RoadNode): number {
  * May this car (approaching `node` on `axis`) enter the junction now? `exit` is the start of the
  * lane it will leave by.
  */
-export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', exit: { x: number; y: number } | null): boolean {
+export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', exit: { x: number; y: number } | null, urgent = false): boolean {
   if (inBox(node, v.body.x, v.body.y)) return true; // already committed: clear the box
   const claim = committed.get(node);
   if (claim && claim.vehicle !== v) {
@@ -45,16 +45,22 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
         (w.time < claim.until || inBox(node, owner.body.x, owner.body.y, owner.spec.length / 2))) return false;
     committed.delete(node);
   }
+  // A driver who cannot clear its exit must not hold priority over other approaches.
+  if (exit && !exitClear(w, v, node, exit)) {
+    arrivals.delete(v);
+    return false;
+  }
   const mine = toBox(v, node);
   let arrival = arrivals.get(v);
   if (!node.lights && mine < 10 && mine > -2) {
     if (arrival?.node !== node || w.time - arrival.seen > 2) {
       const horizontalExit = exit && Math.abs(exit.x - node.x) > node.wv / 2;
-      arrival = { node, at: w.time, seen: w.time, heading: v.body.angle,
+      arrival = { node, at: w.time, seen: w.time, heading: v.body.angle, urgent,
         turn: !!exit && horizontalExit !== (axis === 'h') };
       arrivals.set(v, arrival);
     }
     arrival.seen = w.time;
+    arrival.urgent = urgent;
   }
   const r = Math.max(node.wv, node.wh) / 2 + 22;
   let ok = true;
@@ -69,8 +75,9 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
     if (!node.lights && o.seats[0] && other?.node === node && w.time - other.seen <= 2) {
       const opposite = Math.cos(other.heading - v.body.angle) < -0.5;
       if (crossing || (opposite && (other.turn || arrival?.turn))) {
-        if (inBox(node, o.body.x, o.body.y) || arrival?.node !== node ||
-            other.at < arrival.at || (other.at === arrival.at && o.id < v.id)) ok = false;
+        if (inBox(node, o.body.x, o.body.y) || arrival?.node !== node) ok = false;
+        else if (other.urgent !== urgent) ok = !other.urgent;
+        else if (other.at < arrival.at || (other.at === arrival.at && o.id < v.id)) ok = false;
       }
       return;
     }
@@ -80,7 +87,11 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
       if (theirs > -0.5 && theirs < 9 && (theirs < mine - 0.5 || (Math.abs(theirs - mine) <= 0.5 && o.id < v.id))) ok = false;
     }
   });
-  if (!ok || !exit) return ok;
+  return ok;
+}
+
+function exitClear(w: World, v: Vehicle, node: RoadNode, exit: { x: number; y: number }): boolean {
+  let ok = true;
   // Keep the box clear: only go if the lane we're heading into isn't backed up to the junction.
   // Lane starts lie one metre beyond the junction edge. Reserve enough space for
   // our whole vehicle (including a trailer) and a small stopping gap in that lane.

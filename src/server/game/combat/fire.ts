@@ -206,6 +206,11 @@ function hitscan(w: World, p: Ped, x0: number, y0: number, z: number, angle: num
     hitType = mat.hit;
     if (mat.bleeds) w.emit(FX.Blood, r2(x0 + dx * t), r2(y0 + dy * t));
     damageVehicle(w, v, spec.damage * spec.vehicleMul, p.id, { x: x0, y: y0 });
+    // The driver feels a bullet strike even when the shooter is outside hearing range.
+    const driver = w.peds.get(v.seats[0]);
+    if (!v.wrecked && driver?.ai && !driver.dead && driver.spec.behaviour === 'civilian') {
+      driver.ai.panicT = Math.max(driver.ai.panicT, 6);
+    }
     if (!v.spec.armored) {
       // Bullets through glass and open tops can reach occupants.
       for (const sid of v.seats) {

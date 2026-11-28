@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { pedIndex, vehicleIndex } from '../src/shared/packs';
+import { pedIndex, vehicleIndex, weaponIndex } from '../src/shared/packs';
 import { stepVehicle } from '../src/shared/sim/physics';
 import { cruise, newDrive } from '../src/server/game/ai/driving';
 import { mayEnter, commitJunction } from '../src/server/game/ai/junctions';
 import { laneOf } from '../src/server/game/ai/route';
-import { seatPed, spawnPed, spawnVehicle } from '../src/server/game/factory';
+import { giveWeapon, removeVehicle, seatPed, spawnPed, spawnVehicle } from '../src/server/game/factory';
+import { tryFire } from '../src/server/game/combat/fire';
 import { Room } from '../src/server/room';
 
 process.env.GRIDLOCK_DATA = 'data-smoke/npc-driving';
@@ -64,3 +65,68 @@ w.vehicles.delete(first.id);
 w.rebuildHashes();
 assert(mayEnter(w, later, node, 'v', null), 'next driver goes once clear');
 console.log('NPC lane tracking, cruise braking and junction order passed');
+
+// A blocked outbound lane must not give its waiting driver a veto on the cross street.
+w.vehicles.set(first.id, first);
+const exit = { x: node.x + node.wv / 2 + 1, y: node.y + 1.8 };
+const jam = spawnVehicle(w, first.type, exit.x + 2, exit.y, 0);
+w.rebuildHashes();
+w.time += 3;
+assert(!mayEnter(w, first, node, 'h', exit));
+assert(mayEnter(w, later, node, 'v', null), 'cross traffic can leave while the first exit is full');
+w.vehicles.delete(jam.id);
+w.rebuildHashes();
+w.time += 0.25;
+assert(!mayEnter(w, first, node, 'h', exit), 'a newly clear approach rejoins behind the waiting driver');
+
+assert(mayEnter(w, first, node, 'h', exit, true), 'a frightened driver takes a clear opening ahead of uncommitted traffic');
+assert(!mayEnter(w, later, node, 'v', null), 'the other driver yields to the escaping car');
+commitJunction(w, later, node);
+assert(!mayEnter(w, first, node, 'h', exit, true), 'panic still respects a committed crossing');
+
+// After unloading, an NPC-owned traffic car retains its VIN without becoming a driverless lane obstruction.
+const traffic = driver(lane.sx + 28, lane.sy, 0);
+const registration = w.registry.get(traffic.car)!;
+traffic.car.authorizedDriver = traffic.ped.id;
+w.registry.drive(traffic.ped, traffic.car);
+removeVehicle(w, traffic.car, true);
+const parked = w.registry.show(registration);
+assert.equal(parked.vin, traffic.car.vin);
+assert(registration.slot?.startsWith('parking:'));
+assert.deepEqual(registration.parked, registration.at);
+assert(Math.hypot(parked.body.x - traffic.car.body.x, parked.body.y - traffic.car.body.y) > 1);
+
+// Tick a queue on both sides plus cross traffic from rest through a real four-way junction.
+w.vehicles.clear(); w.peds.clear();
+const four = w.city.nodes.find(n => n.segs.length === 4 && !n.lights)!;
+const queues = four.segs.flatMap(id => {
+  const seg = w.city.segs[id];
+  const dir = seg.b === four.id ? 1 : -1;
+  const l = laneOf(w, seg, dir, 0);
+  return [4, 12].map(back => {
+    const pair = driver(l.ex - l.hx * back, l.ey - l.hy * back, Math.atan2(l.hy, l.hx));
+    return { ...pair, crossed: false };
+  });
+});
+for (let tick = 0; tick < 30 * 45; tick++) {
+  w.time += 1/30;
+  w.rebuildHashes();
+  for (const q of queues) {
+    cruise(w, q.car, q.ped, 1/30);
+    stepVehicle(q.car.body, q.car.spec, q.car.ctl, 1/30, w.statics, true);
+    if (Math.abs(q.car.body.x - four.x) < four.wv/2 && Math.abs(q.car.body.y - four.y) < four.wh/2) q.crossed = true;
+  }
+}
+assert(queues.every(q => q.crossed), 'all eight drivers get a turn through the intersection');
+
+w.vehicles.clear(); w.peds.clear();
+const target = driver(lane.sx + 40, lane.sy, 0);
+const shooter = spawnPed(w, pedIndex('civilian'), target.car.body.x - 22, lane.sy);
+shooter.wi = giveWeapon(shooter, weaponIndex('pistol'), 20);
+shooter.trigger = true; shooter.aim = 0;
+w.rebuildHashes();
+tryFire(w, shooter);
+assert(target.car.hp < target.car.spec.hp && target.ped.ai!.panicT > 0, 'a direct hit spooks a driver beyond the close gunfire radius');
+cruise(w, target.car, target.ped, 1/30, true);
+assert(target.car.ctl.throttle > 0 && !target.car.ctl.handbrake, 'the driver accelerates with a clear escape lane');
+console.log('Blocked exits, restored traffic, four-way queues and driver gunfire reactions passed');

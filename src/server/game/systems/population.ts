@@ -250,7 +250,7 @@ export class Population {
       }
     }
     for (const si of seen) {
-      if (this.spotState.has(si)) continue;
+      if (this.spotState.get(si)) continue;
       const s = w.city.parking[si];
       const slot = 'parking:' + si;
       const saved = w.registry.atSlot(slot);
@@ -260,6 +260,7 @@ export class Population {
         this.spotState.set(si, v.id);
         continue;
       }
+      if (this.spotState.has(si)) continue;
       if (w.nearestPlayerDist2(s.x, s.y) < 70 * 70) continue; // don't pop in view
       let occupied = false;
       w.vehiclesNear(s.x, s.y, 3, () => { occupied = true; });

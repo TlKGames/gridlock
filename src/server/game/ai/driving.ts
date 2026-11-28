@@ -320,7 +320,7 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false, 
   const vf = forwardSpeed(b);
   const junction = nextJunction(w, d);
   const blockedEntry = junction && Math.hypot(junction.at.x - P.x, junction.at.y - P.y) < 22
-    && !mayEnter(w, v, junction.node, junction.axis, junction.exit);
+    && !mayEnter(w, v, junction.node, junction.axis, junction.exit, panic);
   // Drop points we've reached or passed, except a stop line whose light still says stop: a car
   // waiting a few metres short of it must not lose it and roll through the red.
   for (let k = 0; k < 3 && d.pts.length; k++) {

@@ -2,6 +2,8 @@
 import { randomUUID } from 'node:crypto';
 import { rectContains, type Rect } from '../../shared/math';
 import type { Census } from './census';
+import { LANE_W } from '../../shared/world/cityTypes';
+import type { VehicleSpec } from '../../shared/packs/types';
 import { SERVICES, VEHICLES } from '../../shared/packs';
 import type { Ped, Vehicle } from './entities';
 import { spawnVehicle } from './factory';
@@ -125,6 +127,7 @@ export class VehicleRegistry {
       this.capture(v, r);
       if (!r.taken && r.holder === r.owner) r.parked = { ...r.at };
       r.holder = undefined;
+      this.parkReturningTraffic(r, v.spec);
     } else {
       this.releaseSlot(r);
       this.records.delete(r.vin);
@@ -141,12 +144,49 @@ export class VehicleRegistry {
       r.holder = undefined;
       this.index(r);
     }
+    // Reserve the original saved bays first, then repair older in-lane registrations.
+    for (const r of this.records.values()) {
+      const spec = VEHICLES.find(s => s.id === r.model)!;
+      this.parkReturningTraffic(r, spec);
+    }
+  }
+  // Traffic drivers are unloaded with their cars. When the car next streams in alone,
+  // finish the offscreen trip in a parking space instead of leaving it in a travel lane.
+  private parkReturningTraffic(r: Registration, spec: VehicleSpec): void {
+    if (r.stored || r.slot || r.taken || r.lastDriver !== r.owner || !r.owner.startsWith('house:') || spec.movement !== 'wheels') return;
+    const { x, y } = r.at;
+    if (!this.w.map.onRoad(x, y)) return;
+    const { seg, d } = this.w.map.nearestSegment(x, y);
+    if (d > seg.lanes * LANE_W) return;
+    const length = spec.length + (spec.trailer?.length ?? 0);
+    let best = Infinity, index = -1;
+    for (const [i, spot] of this.w.city.parking.entries()) {
+      const distance = (spot.x - x) ** 2 + (spot.y - y) ** 2;
+      if (distance >= best || this.slots.has('parking:' + i)) continue;
+      const pose = { x: spot.x, y: spot.y, angle: spot.angle };
+      if (this.w.statics.resolveObb(pose, length / 2, spec.width / 2)) continue;
+      let occupied = false;
+      for (const other of this.w.vehicles.values()) {
+        if (Math.hypot(other.body.x - spot.x, other.body.y - spot.y) < (other.spec.length + length) / 2) {
+          occupied = true; break;
+        }
+      }
+      if (!occupied) { best = distance; index = i; }
+    }
+    if (index < 0) return;
+    const spot = this.w.city.parking[index];
+    r.at = { x: spot.x, y: spot.y };
+    r.parked = { ...r.at };
+    r.angle = spot.angle;
+    r.slot = 'parking:' + index;
+    this.slots.set(r.slot, r);
   }
   show(r: Registration): Vehicle {
     delete r.stored;
     const live = this.live.get(r.vin);
     if (live) return live;
-    const v = spawnVehicle(this.w, VEHICLES.findIndex(s => s.id === r.model), r.at.x, r.at.y, r.angle, r.color, { vin: r.vin });
+    const type = VEHICLES.findIndex(s => s.id === r.model);
+    const v = spawnVehicle(this.w, type, r.at.x, r.at.y, r.angle, r.color, { vin: r.vin });
     v.hp = r.hp;
     this.live.set(v.vin, v);
     return v;
