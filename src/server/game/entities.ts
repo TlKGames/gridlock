@@ -9,7 +9,7 @@ export type TaskName = 'wander' | 'stand' | 'flee' | 'attack' | 'arrest' | 'driv
   | 'revive' | 'extinguish' | 'return' | 'cower' | 'guard' | 'surrender' | 'chat' | 'none';
 
 export interface DriveState {
-  pts: { x: number; y: number; stop?: number; axis?: 'h' | 'v' }[];
+  pts: { x: number; y: number; stop?: number; lanes?: number; axis?: 'h' | 'v' }[];
   seg: number; dir: 1 | -1; lane: number;
   route: number[];          // node ids remaining (route mode)
   routeT: number;
@@ -17,6 +17,7 @@ export interface DriveState {
   reverseT: number;
   honkT: number;
   blockT: number;           // time spent blocked by something ahead
+  passing: number;          // id of the stationary obstacle being passed
   bypassT: number;          // > 0 while steering around a blockage
   yieldT: number;           // > 0 while pulled over for a siren (counts down once it's gone)
   pullT: number;            // how long we've been pulling over (ease to the kerb, then stop)

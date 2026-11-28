@@ -74,7 +74,7 @@ export function updateVehicles(w: World, dt: number): void {
     if (!v.spec.turret) v.turret = v.body.angle;
     // How long this vehicle has been sitting still for no good reason (lights/junctions don't count).
     const why = driver?.ai?.drive?.why;
-    const waiting = why === 'light' || why === 'junction';
+    const waiting = why === 'light' || why === 'junction' || why === 'car' || why === 'ped' || why === 'siren';
     v.idleT = Math.hypot(v.body.vx, v.body.vy) < 0.5 && !driver?.player && !waiting ? v.idleT + dt : 0;
     for (const sid of v.seats) {
       const o = sid ? w.peds.get(sid) : undefined;

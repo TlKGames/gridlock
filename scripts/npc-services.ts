@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { RULES, pedIndex } from '../src/shared/packs';
 import { Room } from '../src/server/room';
 import { revive, setTask } from '../src/server/game/ai/tasks';
-import { seatPed, spawnPed, unseatPed } from '../src/server/game/factory';
+import { spawnPed, unseatPed } from '../src/server/game/factory';
 import { Dispatch } from '../src/server/game/systems/dispatch';
 import { Population } from '../src/server/game/systems/population';
 
@@ -44,12 +44,33 @@ assert.equal(squads('fire').length, 1);
 assert.notEqual(squads('fire')[0].incident?.target, distant);
 const ambulance = squads('medic')[0], vehicle = w.vehicles.get(ambulance.vehicle)!;
 const [driver, partner] = ambulance.members.map(id => w.peds.get(id)!);
-unseatPed(w, driver); unseatPed(w, partner);
-seatPed(w, partner, vehicle, 0); setTask(partner, 'drive');
-setTask(driver, 'revive', body.id);
+// A second casualty at this scene shares the ambulance. An independent scene gets its own.
+const another = spawnPed(w, pedIndex('civilian'), x + 2, y);
+const separate = spawnPed(w, pedIndex('civilian'), x + 65, y);
+for (const p of [another, separate]) { p.dead = true; p.deadT = 4; }
+poll(12);
+assert.equal(squads('medic').length, 2);
+assert(squads('medic').some(s => s.incident?.x === separate.body.x));
+for (const p of [driver, partner]) {
+  unseatPed(w, p);
+  Object.assign(p.body, { x, y });
+  setTask(p, 'revive');
+  revive(w, p, 1 / 30);
+}
+assert.deepEqual(new Set([driver.ai!.target, partner.ai!.target]), new Set([body.id, another.id]));
+const late = spawnPed(w, pedIndex('civilian'), x + 1, y);
+late.dead = true; late.deadT = 4;
 poll();
-assert(w.squads.has(ambulance.id), 'keep the assignment while a medic is working');
-body.dead = false; setTask(driver, 'return', vehicle.id);
+const treat = (p: typeof driver) => {
+  const patient = w.peds.get(p.ai!.target)!;
+  Object.assign(p.body, { x: patient.body.x, y: patient.body.y });
+  return revive(w, p, 3.1);
+};
+assert(!treat(driver) && driver.ai!.target === late.id, 'crew picks up a new patient at the scene');
+assert(!treat(partner), 'spare medic waits while partner treats the last patient');
+assert(treat(driver) && revive(w, partner, 1 / 30));
+assert(body.revived && another.revived && late.revived && separate.dead);
+for (const p of [driver, partner]) setTask(p, 'return', vehicle.id);
 poll();
 assert(!w.squads.has(ambulance.id) && !vehicle.persistent && !driver.persistent && !partner.persistent);
 

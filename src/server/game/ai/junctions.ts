@@ -13,6 +13,17 @@ export const occupiesRoad = (v: Vehicle): boolean => !floats(v.spec) && !(flies(
 const axisOf = (angle: number): 'h' | 'v' => (Math.abs(Math.cos(angle)) >= Math.abs(Math.sin(angle)) ? 'h' : 'v');
 const inBox = (n: RoadNode, x: number, y: number, pad = 0) => Math.abs(x - n.x) < n.wv / 2 + pad && Math.abs(y - n.y) < n.wh / 2 + pad;
 
+// Keep arrival order while drivers wait, including the short interval between passing
+// the stop line and entering the box. Stale entries from abandoned approaches expire.
+const arrivals = new WeakMap<Vehicle, { node: RoadNode; at: number; seen: number; heading: number; turn: boolean }>();
+
+// A driver commits before its centre reaches the box. Protect that interval and
+// the turn itself until the rear clears, even if the traffic light changes.
+const committed = new WeakMap<RoadNode, { vehicle: Vehicle; until: number }>();
+export function commitJunction(w: World, v: Vehicle, node: RoadNode): void {
+  committed.set(node, { vehicle: v, until: w.time + 2 });
+}
+
 /** Distance from a vehicle to the edge of the node's box along its heading (negative = inside). */
 function toBox(v: Vehicle, n: RoadNode): number {
   const c = Math.cos(v.body.angle), s = Math.sin(v.body.angle);
@@ -27,7 +38,24 @@ function toBox(v: Vehicle, n: RoadNode): number {
  */
 export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', exit: { x: number; y: number } | null): boolean {
   if (inBox(node, v.body.x, v.body.y)) return true; // already committed: clear the box
+  const claim = committed.get(node);
+  if (claim && claim.vehicle !== v) {
+    const owner = claim.vehicle;
+    if (w.vehicles.has(owner.id) && !owner.wrecked && owner.seats[0] &&
+        (w.time < claim.until || inBox(node, owner.body.x, owner.body.y, owner.spec.length / 2))) return false;
+    committed.delete(node);
+  }
   const mine = toBox(v, node);
+  let arrival = arrivals.get(v);
+  if (!node.lights && mine < 10 && mine > -2) {
+    if (arrival?.node !== node || w.time - arrival.seen > 2) {
+      const horizontalExit = exit && Math.abs(exit.x - node.x) > node.wv / 2;
+      arrival = { node, at: w.time, seen: w.time, heading: v.body.angle,
+        turn: !!exit && horizontalExit !== (axis === 'h') };
+      arrivals.set(v, arrival);
+    }
+    arrival.seen = w.time;
+  }
   const r = Math.max(node.wv, node.wh) / 2 + 22;
   let ok = true;
   w.vehiclesNear(node.x, node.y, r, (o) => {
@@ -37,7 +65,17 @@ export function mayEnter(w: World, v: Vehicle, node: RoadNode, axis: 'h' | 'v', 
     // Crossing traffic inside the box (moving or stuck there): wait for it to clear.
     if (crossing && inBox(node, o.body.x, o.body.y, 0.5)) { ok = false; return; }
     // Unsignalled junction: first to arrive goes; ties broken by id.
-    if (!node.lights && crossing && moving && o.seats[0]) {
+    const other = arrivals.get(o);
+    if (!node.lights && o.seats[0] && other?.node === node && w.time - other.seen <= 2) {
+      const opposite = Math.cos(other.heading - v.body.angle) < -0.5;
+      if (crossing || (opposite && (other.turn || arrival?.turn))) {
+        if (inBox(node, o.body.x, o.body.y) || arrival?.node !== node ||
+            other.at < arrival.at || (other.at === arrival.at && o.id < v.id)) ok = false;
+      }
+      return;
+    }
+    // A player-driven vehicle has no arrival record.
+    if (!node.lights && crossing && moving && o.seats[0] && !w.peds.get(o.seats[0])?.ai) {
       const theirs = toBox(o, node);
       if (theirs > -0.5 && theirs < 9 && (theirs < mine - 0.5 || (Math.abs(theirs - mine) <= 0.5 && o.id < v.id))) ok = false;
     }

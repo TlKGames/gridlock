@@ -7,6 +7,7 @@ import { freeSeat, seatPed } from '../factory';
 import type { World } from '../world';
 import { CYCLE } from '../../../shared/world/traffic';
 import { safeToCross } from './pedCrossings';
+import { MEDICAL_TIMEOUT, nextPatient, needsMedic } from './medicalScene';
 import { reachDist } from './doors';
 import { soldierHostile } from './soldiers';
 import { route } from '../systems/lifts';
@@ -196,7 +197,10 @@ export function arrest(w: World, p: Ped, dt: number): boolean {
 export function revive(w: World, p: Ped, dt: number): boolean {
   const ai = p.ai!;
   const body = w.peds.get(ai.target);
-  if (!body || !body.dead || body.player) return true;
+  if (!body || !needsMedic(body)) {
+    stop(p);
+    return !nextPatient(w, p);
+  }
   const { x, y } = body.body;
   const { d, sameFloor } = reachDist(p.body.x, p.body.y, x, y);
   if (!sameFloor || d > 1.3 || w.statics.raycast(p.body.x, p.body.y, x, y, 1.2)) {
@@ -210,8 +214,10 @@ export function revive(w: World, p: Ped, dt: number): boolean {
   body.dead = false;
   body.hp = body.spec.hp * 0.5;
   body.revived = true;
+  const scene = w.squads.get(ai.squad)?.incident;
+  if (scene) scene.expires = w.time + MEDICAL_TIMEOUT;
   if (body.ai) { body.ai.block = -1; setTask(body, body.ai.post ? 'stand' : 'wander'); }
-  return true;
+  return !nextPatient(w, p);
 }
 
 export function extinguish(w: World, p: Ped, dt: number): boolean {

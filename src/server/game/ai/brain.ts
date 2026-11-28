@@ -177,7 +177,8 @@ function passenger(w: World, p: Ped, v: Vehicle): void {
 function respond(w: World, p: Ped, v: Vehicle, dt: number): void {
   const ai = p.ai!;
   v.siren = !!v.spec.siren;
-  const d = driveTo(w, v, p, ai.tx, ai.ty, dt, { stopAt: 9, ram: false, speed: 22 });
+  const goal = p.spec.behaviour === 'medic' ? streetGoal(w, ai.tx, ai.ty) : { x: ai.tx, y: ai.ty, frontage: undefined };
+  const d = driveTo(w, v, p, goal.x, goal.y, dt, { stopAt: 9, ram: false, speed: 22, frontage: goal.frontage });
   if (ai.t > 90) { setTask(p, 'drive'); return; }
   if (d < 16 && Math.abs(forwardSpeed(v.body)) < 1.5) {
     const job = ai.target;

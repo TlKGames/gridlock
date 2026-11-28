@@ -1,22 +1,26 @@
 // NPC driving: lane-following traffic with lights, and routed/direct pursuit driving.
 import { angleDiff, clamp } from '../../../shared/math';
+import { obbVsObb } from '../../../shared/sim/dynamic';
 import { flies } from '../../../shared/sim/kinds';
 import { forwardSpeed } from '../../../shared/sim/physics';
-import type { RoadNode, Segment } from '../../../shared/world/cityTypes';
+import { LANE_W, type RoadNode, type Segment } from '../../../shared/world/cityTypes';
 import { groundOf } from '../../../shared/world/levels';
+import { rayAabb } from '../../../shared/world/shapes';
 import { lightState } from '../../../shared/world/traffic';
 import type { DriveState, Ped, Vehicle } from '../entities';
 import type { World } from '../world';
-import { mayEnter, nextJunction, occupiesRoad } from './junctions';
+import { commitJunction, mayEnter, nextJunction, occupiesRoad } from './junctions';
 import { findRoute, laneOf, segBetween } from './route';
 
 export function newDrive(w: World, v: Vehicle): DriveState {
   const { seg } = w.map.nearestSegment(v.body.x, v.body.y);
   const c = Math.cos(v.body.angle), s = Math.sin(v.body.angle);
   const dir: 1 | -1 = (seg.axis === 'h' ? c : s) >= 0 ? 1 : -1;
-  const lane = seg.lanes > 1 && w.rng.chance(0.5) ? 1 : 0;
+  const P = groundOf(v.body.x, v.body.y);
+  const offset = dir * (seg.axis === 'h' ? P.y - seg.y0 : seg.x0 - P.x);
+  const lane = clamp(Math.floor(offset / LANE_W), 0, seg.lanes - 1);
   const L = laneOf(w, seg, dir, lane);
-  return { pts: [{ x: L.ex, y: L.ey, stop: L.to.id, axis: seg.axis }], seg: seg.id, dir, lane, route: [], routeT: 0, stuckT: 0, reverseT: 0, honkT: 0, blockT: 0, bypassT: 0, yieldT: 0, pullT: 0, why: '' };
+  return { pts: [{ x: L.ex, y: L.ey, stop: L.to.id, lanes: seg.lanes, axis: seg.axis }], seg: seg.id, dir, lane, route: [], routeT: 0, stuckT: 0, reverseT: 0, honkT: 0, blockT: 0, passing: 0, bypassT: 0, yieldT: 0, pullT: 0, why: '' };
 }
 
 /** Pulling over for a siren: how far right of the lane line to aim (m), and how long to crawl
@@ -64,6 +68,18 @@ function extend(w: World, d: DriveState): void {
   let options = node.segs.filter((s) => s !== seg.id);
   if (!options.length) options = [seg.id];
   // Straight on is likeliest.
+  // Choose a turn that can be made from this lane. If the road ends, use
+  // the available exit instead of inventing a turn across a through lane.
+  if (seg.lanes > 1) {
+    const legal = options.filter(id => {
+      const next = w.city.segs[id];
+      if (next.axis === seg.axis) return true;
+      const outgoing = laneOf(w, next, next.a === node.id ? 1 : -1, 0);
+      const right = cur.hx * outgoing.hy - cur.hy * outgoing.hx > 0;
+      return right ? d.lane === seg.lanes - 1 : d.lane === 0;
+    });
+    if (legal.length) options = legal;
+  }
   const weights = options.map((s) => (w.city.segs[s].axis === seg.axis ? 2.2 : 1));
   let r = w.rng.next() * weights.reduce((a, b) => a + b, 0);
   let pick = options[0];
@@ -85,29 +101,82 @@ function extend(w: World, d: DriveState): void {
     const a = (1 - t) * (1 - t), b = 2 * (1 - t) * t, c = t * t;
     d.pts.push({ x: a * cur.ex + b * cx + c * L.sx, y: a * cur.ey + b * cy + c * L.sy, axis: turn ? undefined : seg.axis });
   }
-  d.pts.push({ x: L.sx, y: L.sy });
-  d.pts.push({ x: L.ex, y: L.ey, stop: L.to.id, axis: next.axis });
+  d.pts.push({ x: L.sx, y: L.sy, axis: turn ? undefined : seg.axis });
+  d.pts.push({ x: L.ex, y: L.ey, stop: L.to.id, lanes: next.lanes, axis: next.axis });
   d.seg = next.id; d.dir = ndir; d.lane = nlane;
+}
+
+function laneAim(P: { x: number; y: number }, d: DriveState, look: number) {
+  const pt = d.pts[0];
+  let tx = pt.x, ty = pt.y;
+  const d0 = Math.hypot(pt.x - P.x, pt.y - P.y);
+  if (pt.stop !== undefined && d0 > look) {
+    // Track the lane centre a few metres ahead, even when the stop line is a block away.
+    if (pt.axis === 'h') tx = P.x + Math.sign(pt.x - P.x) * look;
+    else ty = P.y + Math.sign(pt.y - P.y) * look;
+  } else if (d0 < look && d.pts[1]) {
+    const n = d.pts[1];
+    const segLen = Math.hypot(n.x - pt.x, n.y - pt.y) || 1;
+    const t = Math.min(1, (look - d0) / segLen);
+    tx = pt.x + (n.x - pt.x) * t; ty = pt.y + (n.y - pt.y) * t;
+  }
+  return { x: tx, y: ty };
+}
+
+/** Follow the upcoming bend when looking for traffic. Projecting a straight line
+ * from the bonnet mid-turn can mistake a parked car on the far curb for a queue. */
+function laneGap(v: Vehicle, o: Vehicle, points: readonly { x: number; y: number }[], look: number): number {
+  const c = Math.cos(o.body.angle), s = Math.sin(o.body.angle);
+  const margin = v.spec.width / 2 + 0.12;
+  const hl = o.spec.length / 2 + 0.12, hw = o.spec.width / 2 + margin;
+  const box = { x0: -hl, x1: hl, y0: -hw, y1: hw, h: 0 };
+  let { x, y } = groundOf(v.body.x, v.body.y);
+  const obstacle = groundOf(o.body.x, o.body.y);
+  let walked = 0;
+  for (const pt of points) {
+    const dx = pt.x - x, dy = pt.y - y, len = Math.hypot(dx, dy);
+    if (len < 0.01) continue;
+    const rx = x - obstacle.x, ry = y - obstacle.y;
+    const ax = rx * c + ry * s, ay = -rx * s + ry * c;
+    if (Math.abs(ax) <= hl && Math.abs(ay) <= hw && rx * dx + ry * dy < 0) return walked - v.spec.length / 2;
+    const hit = rayAabb(ax, ay, dx * c + dy * s, -dx * s + dy * c, box);
+    if (hit) return walked + len * hit.t - v.spec.length / 2;
+    walked += len;
+    if (walked > look) break;
+    x = pt.x; y = pt.y;
+  }
+  return Infinity;
 }
 
 /**
  * Speed cap from whatever is in front of the vehicle. `still` = the nearest blocker is a parked,
  * empty or wrecked car (worth driving around); `ped` = someone standing in the road.
  */
-function clearance(w: World, v: Vehicle, aggressive: boolean, keepGap = false): { cap: number; ped: boolean; still: boolean; stalled: boolean } {
+function clearance(w: World, v: Vehicle, aggressive: boolean, keepGap = false, points?: readonly { x: number; y: number }[], ignore = 0): { blocker: number; cap: number; ped: boolean; still: boolean; stalled: boolean } {
   const b = v.body, c = Math.cos(b.angle), s = Math.sin(b.angle);
   const hl = v.spec.length / 2, hw = v.spec.width / 2;
-  let cap = Infinity, ped = false, still = false, stalled = false;
+  let blocker = 0, cap = Infinity, ped = false, still = false, stalled = false;
   const look = 14 + Math.abs(forwardSpeed(b)) * 1.1;
   w.vehiclesNear(b.x + c * look / 2, b.y + s * look / 2, look / 2 + 10, (o) => {
     if (o === v || !occupiesRoad(o)) return;
+    if (o.id === ignore && Math.hypot(o.body.vx, o.body.vy) < 0.5) return;
     const rx = o.body.x - b.x, ry = o.body.y - b.y;
     const f = rx * c + ry * s, l = -rx * s + ry * c;
-    if (f <= 0 || f > look + o.spec.length || Math.abs(l) > hw + o.spec.width / 2 + 0.6) return;
-    const gap = f - hl - o.spec.length / 2;
-    const cc = Math.max(0, (gap - (aggressive && !keepGap ? 1 : 2.5)) * 1.1);
+    const heading = o.body.angle - b.angle;
+    const cos = Math.abs(Math.cos(heading)), sin = Math.abs(Math.sin(heading));
+    const halfLength = (o.spec.length * cos + o.spec.width * sin) / 2;
+    const halfWidth = (o.spec.width * cos + o.spec.length * sin) / 2;
+    if (!points && (f <= 0 || f > look + halfLength || Math.abs(l) > hw + halfWidth + 0.12)) return;
+    const gap = points ? laneGap(v, o, points, look) : f - hl - halfLength;
+    if (gap > look) return;
+    const parallel = Math.cos(heading) > 0.7;
+    const standstillGap = parallel && (!aggressive || keepGap) ? 2 : 0.45;
+    const leadSpeed = Math.max(0, o.body.vx * c + o.body.vy * s);
+    // Follow the leader at a time gap and brake early when closing on a queue.
+    const space = Math.max(0, gap - standstillGap);
+    const cc = Math.min(space / 1.15, Math.sqrt(leadSpeed * leadSpeed + 8 * space));
     if (cc < cap) {
-      cap = cc;
+      blocker = o.id; cap = cc;
       // Worth going around: parked/empty/wrecked cars, or a driven car stalled for no reason
       // (not one patiently queuing at a light or junction).
       still = Math.hypot(o.body.vx, o.body.vy) < 0.5 && (o.wrecked || o.burning >= 0 || !o.seats[0] || o.idleT > 8);
@@ -126,7 +195,29 @@ function clearance(w: World, v: Vehicle, aggressive: boolean, keepGap = false): 
       if (pc < cap) { cap = pc; ped = true; still = false; stalled = false; }
     });
   }
-  return { cap, ped, still, stalled };
+  return { blocker, cap, ped, still, stalled };
+}
+
+/** When turning past a stopped vehicle, the padded following corridor can overlap
+ * its corner even though there is room for our wheels to straighten out. Check
+ * the actual footprints a metre ahead before allowing a walking-speed creep. */
+function canCreep(w: World, v: Vehicle, blocker: Vehicle): boolean {
+  const b = v.body, dx = blocker.body.x - b.x, dy = blocker.body.y - b.y;
+  const across = Math.abs(dy * Math.cos(b.angle) - dx * Math.sin(b.angle));
+  if (across < (v.spec.width + blocker.spec.width) / 2 - 0.2) return false;
+
+  let clear = true;
+  w.vehiclesNear(b.x, b.y, v.spec.length / 2 + 12, o => {
+    if (!clear || o === v || !occupiesRoad(o)) return;
+    const other = { x: o.body.x, y: o.body.y, angle: o.body.angle, hl: o.spec.length / 2, hw: o.spec.width / 2 };
+    for (const distance of [0, 0.6, 1.2]) {
+      const heading = b.angle;
+      const probe = { x: b.x + distance * Math.cos(heading), y: b.y + distance * Math.sin(heading),
+        angle: heading, hl: v.spec.length / 2 + 0.12, hw: v.spec.width / 2 + 0.12 };
+      if (obbVsObb(probe, other)) { clear = false; break; }
+    }
+  });
+  return clear;
 }
 
 /** Is the lane to the left (oncoming side) free of traffic for an overtake? */
@@ -155,18 +246,32 @@ function steerTo(v: Vehicle, tx: number, ty: number, speed: number): void {
   const backing = speed < 0;
   if (backing) diff = angleDiff(b.angle + Math.PI, want);
   v.ctl.steer = clamp(diff * 2.4, -1, 1) * (backing ? -1 : 1);
+  if (speed >= 0 && speed < 0.25) speed = 0;
   const dv = speed - vf;
   if (speed === 0 && Math.abs(vf) < 0.6) { v.ctl.throttle = 0; v.ctl.handbrake = true; return; }
   v.ctl.handbrake = false;
-  v.ctl.throttle = dv > 0 ? clamp(dv * 0.45, 0.15, 1) : clamp(dv * 0.5, -1, -0.05);
+  // Coast through small speed overshoots. Real stops still brake down to a hold.
+  if (speed > 0 && dv <= 0 && dv > -0.9) v.ctl.throttle = 0;
+  else v.ctl.throttle = clamp(dv * (dv > 0 ? 0.45 : 0.5), -1, 1);
 }
 
 /** Handles being wedged: back up with opposite lock for a moment. */
-function unstick(v: Vehicle, d: DriveState, wanted: number, dt: number): boolean {
+function unstick(w: World, v: Vehicle, d: DriveState, wanted: number, dt: number): boolean {
   if (d.reverseT > 0) {
     d.reverseT -= dt;
+    const c = Math.cos(v.body.angle), s = Math.sin(v.body.angle);
+    const rear = v.spec.length / 2 + 2;
+    let clear = true;
+    w.vehiclesNear(v.body.x - rear * c, v.body.y - rear * s, rear + 7, o => {
+      if (o === v || !occupiesRoad(o)) return;
+      const dx = o.body.x - v.body.x, dy = o.body.y - v.body.y;
+      const along = -(dx * c + dy * s), across = Math.abs(-dx * s + dy * c);
+      if (along > 0 && along < rear + o.spec.length / 2 && across < (v.spec.width + o.spec.width) / 2 + 0.6) clear = false;
+    });
+    if (!clear) { v.ctl.throttle = 0; v.ctl.handbrake = true; return true; }
     v.ctl.throttle = -0.8;
-    v.ctl.steer = -v.ctl.steer || 0.6;
+    // Hold the chosen lock through recovery; flipping it every tick cancels the turn.
+    if (d.reverseT + dt >= 1.3) v.ctl.steer = -v.ctl.steer || 0.6;
     v.ctl.handbrake = false;
     return true;
   }
@@ -194,6 +299,9 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
   const P = groundOf(b.x, b.y);
   while (d.pts.length < 5) extend(w, d);
   const vf = forwardSpeed(b);
+  const junction = nextJunction(w, d);
+  const blockedEntry = junction && Math.hypot(junction.at.x - P.x, junction.at.y - P.y) < 22
+    && !mayEnter(w, v, junction.node, junction.axis, junction.exit);
   // Drop points we've reached or passed, except a stop line whose light still says stop: a car
   // waiting a few metres short of it must not lose it and roll through the red.
   for (let k = 0; k < 3 && d.pts.length; k++) {
@@ -204,26 +312,41 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
     // A stop line only counts as passed once you're clearly into the junction: a car stopped
     // at the line in a neighbouring lane has the point beside it, not behind it.
     const passed = pt.stop !== undefined ? ahead < -2 && dd < 10 : ahead < 0 && dd < 10;
+    if (pt === junction?.at && blockedEntry) break;
     if (!passed && pt.stop !== undefined && !panic && mustStop(w.city.nodes[pt.stop], pt.axis!, w.time, Math.max(0, ahead), vf)) break;
-    if (dd < 3 + Math.abs(vf) * 0.15 || passed) d.pts.shift(); else break;
+    if (dd >= 2 + Math.abs(vf) * 0.12 && !passed) break;
+    if (pt.stop !== undefined) commitJunction(w, v, w.city.nodes[pt.stop]);
+    d.pts.shift();
   }
   if (d.pts.length < 5) extend(w, d);
-  const seg = w.city.segs[d.seg];
-  let target = panic ? 18 : seg.lanes > 1 ? 16 : 11.5;
+  const laneCount = d.pts.find(pt => pt.stop !== undefined)?.lanes ?? 1;
+  let target = panic ? 18 : laneCount > 1 ? 16 : 11.5;
   target = Math.min(target, v.spec.maxSpeed * 0.8);
   // Slow for turns ahead.
-  if (d.pts.slice(0, 3).some((pt) => !pt.axis && pt.stop === undefined)) target = Math.min(target, panic ? 11 : 7.5);
+  let pathDistance = 0, lastX = P.x, lastY = P.y;
+  for (const pt of d.pts) {
+    pathDistance += Math.hypot(pt.x - lastX, pt.y - lastY);
+    if (pathDistance > 45) break;
+    if (!pt.axis) {
+      const bendSpeed = panic ? 9 : v.spec.minTurnRadius ? 4 : 6;
+      target = Math.min(target, Math.sqrt(bendSpeed ** 2 + 6 * Math.max(0, pathDistance - 6)));
+      break;
+    }
+    lastX = pt.x; lastY = pt.y;
+  }
   // Lights.
   let red = false;
   if (!panic) {
-    for (const pt of d.pts.slice(0, 3)) {
+    let dist = 0, x = P.x, y = P.y;
+    for (const pt of d.pts.slice(0, 4)) {
+      dist += Math.hypot(pt.x - x, pt.y - y);
+      x = pt.x; y = pt.y;
       if (pt.stop === undefined) continue;
       const node = w.city.nodes[pt.stop];
-      // Distance to the line along your heading (lanes are offset sideways from the point).
-      const dist = Math.max(0, (pt.x - P.x) * Math.cos(b.angle) + (pt.y - P.y) * Math.sin(b.angle));
+      // Measure around the turn: a red signal on the next block is still far away.
       if (mustStop(node, pt.axis!, w.time, dist, vf)) {
         // Brake to stop on the line (5 m/s² comfortable), then hold.
-        target = Math.min(target, Math.sqrt(2 * 5 * Math.max(0, dist - 1)));
+        target = Math.min(target, Math.sqrt(2 * 5 * Math.max(0, dist - Math.max(1, v.spec.length / 2))));
         red = target < 2;
       }
       break;
@@ -231,18 +354,17 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
   }
   // Junction right-of-way (lights already handled): wait at the line if the box isn't ours.
   let yielding = false;
-  if (!red) {
-    const j = nextJunction(w, d);
-    if (j) {
-      const dist = Math.hypot(j.at.x - P.x, j.at.y - P.y);
-      if (dist < 16 && !mayEnter(w, v, j.node, j.axis, j.exit)) {
-        target = Math.min(target, Math.sqrt(2 * 5 * Math.max(0, dist - 1.5)));
-        yielding = target < 2;
-      }
-    }
+  if (junction && blockedEntry) {
+    const distance = Math.hypot(junction.at.x - P.x, junction.at.y - P.y);
+    target = Math.min(target, Math.sqrt(8 * Math.max(0, distance - Math.max(2, v.spec.length / 2 + 0.5))));
+    yielding = true;
   }
   // Spooked drivers ignore people in the road but still keep a gap to the car ahead.
-  const clear = clearance(w, v, panic || d.bypassT > 0, panic && d.bypassT <= 0);
+  const pt = d.pts[0];
+  const look = pt.axis ? 4.5 + Math.abs(vf) * 0.35 : 2.8 + Math.abs(vf) * 0.15;
+  const aim = laneAim(P, d, look);
+  const path = pt.stop !== undefined && Math.hypot(pt.x - P.x, pt.y - P.y) > look ? [aim, ...d.pts] : d.pts;
+  const clear = clearance(w, v, panic, true, d.bypassT > 0 ? undefined : path, d.bypassT > 0 ? d.passing : 0);
   // A siren coming: ease over to the kerb at a crawl, stop there, and stay put until it's been gone
   // a few seconds. Fleeing drivers and other emergency vehicles don't.
   if (!panic && !v.spec.siren && sirenApproaching(w, v)) d.yieldT = 3;
@@ -250,8 +372,11 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
   const pulling = d.yieldT > 0;
   if (pulling) { d.pullT += dt; d.bypassT = 0; } else d.pullT = 0;
   const held = red || yielding || pulling;
+  const blocker = w.vehicles.get(clear.blocker);
+  const creeping = !held && !clear.ped && clear.cap < 1 && vf < 1.5 && blocker && canCreep(w, v, blocker);
+  if (creeping) clear.cap = 1.2;
   // Overtakes crawl past (bumps under ~4 m/s do no damage).
-  if (d.bypassT > 0) { d.bypassT -= dt; target = Math.min(target, 4); }
+  if (d.bypassT > 0) { d.bypassT -= dt; target = Math.min(target, 4, clear.cap); }
   else target = Math.min(target, clear.cap);
   if (pulling) target = Math.min(target, d.pullT < PULL_TIME ? 4 : 0);
   // Horn only when it's called for: a person standing in the road, or a driver stopped in it for
@@ -262,33 +387,27 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
     d.honkT += dt;
     if (d.honkT > 1.5) { d.honkT = -(8 + (v.id % 5)); v.horn = true; }
   } else d.honkT = Math.min(0, d.honkT + dt);
+  const first = d.pts[0];
+  // Pass only on a straight with a marked same-direction lane to our left.
+  const canPass = first.stop !== undefined && (first.axis === 'h'
+    ? Math.abs(P.y - w.city.nodes[first.stop].y)
+    : Math.abs(P.x - w.city.nodes[first.stop].x)) > LANE_W
+    && Math.hypot(first.x - P.x, first.y - P.y) > 22;
   if (blocked) {
     d.blockT += dt;
-    // Go around: a parked/wrecked car after a moment, a person who won't move after a while,
-    // but only when the oncoming lane is clear.
-    const wait = clear.still ? 1.5 : clear.ped ? 4 : Infinity; // queues are waited out
-    if (d.blockT > wait && laneClear(w, v)) { d.blockT = 0; d.bypassT = 3.5; }
-    // Deadlock breaker: still wedged after 10 s (a ring of cars all waiting on each other):
-    // back up a touch, then squeeze round at a crawl.
-    else if (d.blockT > 10 + (v.id % 5)) { d.blockT = 0; d.reverseT = 1; d.bypassT = 4; }
+    // A stationary obstruction can be passed in a clear adjacent travel lane.
+    const wait = clear.still ? 2 : Infinity; // never pass someone waiting in traffic or a pedestrian
+    if (d.blockT > wait && canPass && laneClear(w, v)) { d.blockT = 0; d.passing = clear.blocker; d.bypassT = 3.5; }
   } else d.blockT = Math.max(0, d.blockT - dt);
   // Spooked drivers don't wait: when actually blocked they swerve around (if there's room) and go.
-  if (panic && clear.cap < 1.5 && vf < 3 && d.bypassT <= 0 && laneClear(w, v)) d.bypassT = 2;
+  if (panic && clear.still && canPass && clear.cap < 1.5 && vf < 3 && d.bypassT <= 0 && laneClear(w, v)) { d.passing = clear.blocker; d.bypassT = 2; }
   d.why = pulling ? 'siren' : d.reverseT > 0 ? 'reverse' : d.bypassT > 0 ? 'bypass' : red ? 'light' : yielding ? 'junction' : clear.ped && clear.cap < 2 ? 'ped' : clear.cap < 2 ? 'car' : 'free';
-  if (unstick(v, d, Math.max(target, d.bypassT > 0 ? 3 : 0), dt)) return;
-  // Pure pursuit on the polyline (aiming closer in while pulling over, so the car swings across).
-  const look = pulling ? 4 : 6 + Math.abs(vf) * 0.45;
-  const pt = d.pts[0];
-  let tx = pt.x, ty = pt.y;
-  const d0 = Math.hypot(pt.x - P.x, pt.y - P.y);
-  if (d0 < look && d.pts[1]) {
-    const n = d.pts[1];
-    const segLen = Math.hypot(n.x - pt.x, n.y - pt.y) || 1;
-    const t = Math.min(1, (look - d0) / segLen);
-    tx = pt.x + (n.x - pt.x) * t; ty = pt.y + (n.y - pt.y) * t;
-  }
+  if (unstick(w, v, d, target, dt)) return;
+  // Apply the passing or pull-over offset to the lane target.
+
+  let { x: tx, y: ty } = aim;
   if (d.bypassT > 0) {
-    // Offset into the oncoming lane (to the left of travel).
+    // Offset into the adjacent passing lane.
     tx += Math.sin(b.angle) * 3.8; ty -= Math.cos(b.angle) * 3.8;
   } else if (pulling) {
     // Over toward the kerb: aim a fixed distance right of the lane line (on a straight, the lane's
@@ -301,6 +420,7 @@ export function cruise(w: World, v: Vehicle, p: Ped, dt: number, panic = false):
     ty = pt.y + ay * (along + 6) + ax * PULL_OVER;
   }
   steerTo(v, tx, ty, target);
+  if (creeping) v.ctl.steer = 0;
 }
 
 interface DriveGoal { stopAt: number; ram: boolean; speed?: number; frontage?: Segment }
@@ -330,7 +450,7 @@ export function routeTo(w: World, v: Vehicle, d: DriveState, tx: number, ty: num
   if ((dist < 45 || onFrontage) && P.f === T.f && !w.statics.raycast(b.x, b.y, tx, ty, 1)) {
     let target = dist <= opts.stopAt ? 0 : opts.ram ? fast : Math.min(fast, Math.sqrt(2 * 8 * Math.max(0, dist - opts.stopAt)));
     if (!opts.ram) target = Math.min(target, clear.cap + 2);
-    if (unstick(v, d, Math.max(target, 3), dt)) return dist;
+    if (unstick(w, v, d, Math.max(target, 3), dt)) return dist;
     steerTo(v, T.x, T.y, target);
     return dist;
   }
@@ -375,7 +495,7 @@ export function routeTo(w: World, v: Vehicle, d: DriveState, tx: number, ty: num
     gx += Math.sin(b.angle) * 3.6; gy -= Math.cos(b.angle) * 3.6;
     target = Math.max(target, Math.min(fast, 13));
   }
-  if (unstick(v, d, Math.max(target, 3), dt)) return dist;
+  if (unstick(w, v, d, Math.max(target, 3), dt)) return dist;
   steerTo(v, gx, gy, target);
   return dist;
 }

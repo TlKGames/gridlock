@@ -4,6 +4,8 @@ import { SERVICE_CALLS, type Squad as SquadSpec, VEHICLES, WANTED, pedIndex, veh
 import { flies } from '../../../shared/sim/kinds';
 import { Mode } from '../../../shared/protocol';
 import { BEHAVIOURS } from '../ai/behaviours';
+import { MEDICAL_RADIUS, MEDICAL_TIMEOUT, needsMedic } from '../ai/medicalScene';
+import { streetGoal } from '../ai/doors';
 import { setTask } from '../ai/tasks';
 import type { Squad } from '../entities';
 import { seatPed, spawnPed, spawnVehicle } from '../factory';
@@ -96,17 +98,18 @@ export class Dispatch {
 
   private medics(): void {
     const w = this.w, call = SERVICE_CALLS.medic;
-    const assigned = new Set<number>();
-    for (const s of w.squads.values()) if (s.key === 'medic' && s.incident) assigned.add(s.incident.target);
+    const active = [...w.squads.values()].filter(s => s.key === 'medic' && s.incident);
     for (const p of w.peds.values()) {
-      if (assigned.size >= call.maxActive) return;
-      if (!p.dead || p.player || p.deadT < 3 || p.revived || assigned.has(p.id)) continue;
+      if (active.length >= call.maxActive) return;
+      if (!needsMedic(p) || p.deadT < 3) continue;
       const { x, y } = p.body;
+      if (active.some(s => dist2(x, y, s.incident!.x, s.incident!.y) <= MEDICAL_RADIUS ** 2)) continue;
       if (w.nearestPlayerDist2(x, y) > 150 * 150) continue;
-      const squad = this.spawnSquad(call.squad, 'medic', 0, p.body, (d) => setTask(w.peds.get(d)!, 'respond', p.id, x, y));
+      const goal = streetGoal(w, x, y);
+      const squad = this.spawnSquad(call.squad, 'medic', 0, goal, d => setTask(w.peds.get(d)!, 'respond', 0, x, y));
       if (squad) {
-        squad.incident = { target: p.id, x, y, expires: w.time + SERVICE_TIMEOUT };
-        assigned.add(p.id);
+        squad.incident = { target: 0, x, y, expires: w.time + MEDICAL_TIMEOUT };
+        active.push(squad);
       }
     }
   }
